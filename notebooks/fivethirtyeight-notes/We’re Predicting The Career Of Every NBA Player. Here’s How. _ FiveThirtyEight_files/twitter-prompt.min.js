@@ -1,0 +1,1 @@
+!function(c,r){r(".lb-twitter-prompt").each(function(t,e){r(e).on("click",function(t){var e=t.currentTarget.href,r=t.currentTarget.title,n=screen.width/2-300,i="width=600,height=350,location=yes,status=yes,top="+(screen.height/2-175)+", left="+n;if(t.preventDefault(),e&&r)return c.open(e,r,i),!1})})}(this,jQuery);

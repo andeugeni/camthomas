@@ -1,0 +1,131 @@
+(function initDCFRelay(window) {
+  const EMPTY_OBJ = Object.freeze({});
+  const SEND_DCF_CONSENT = 'send-dcf-consent';
+  const DCF_RELAY = 'dcf-relay';
+
+  const defaultConfig = {
+    autoInit: true,
+    messageSourceName: 'dcf-track',
+    namespace: 'dtci.media',
+    embedPath: '/web-player-bundle',
+    pollForTMS: true,
+    pollRate: 2000,
+    dcfCookiesNames: 'usprivacy,_dcf,OTAdditionalConsentString'
+  };
+  const currentScript = document.currentScript || document.querySelector('script[src*="/dcf-relay.js"]') || EMPTY_OBJ;
+  const config = { ...defaultConfig, ...(currentScript.dataset || EMPTY_OBJ) };
+  const { embedPath, messageSourceName, namespace, pollForTMS, pollRate, dcfCookiesNames } = config;
+
+  let tmsCheckInterval;
+  let queuedEvents = [];
+
+  function parseMessage(evt = EMPTY_OBJ) {
+    const {
+      data: { source, payload: payloadData },
+    } = evt;
+    let payload;
+
+    if (source === messageSourceName) {
+      if (typeof payloadData === 'string') {
+        try {
+          payload = JSON.parse(payloadData);
+        } catch (err) {
+          console.error(err);
+        }
+      } else {
+        payload = serializedPayload;
+      }
+
+      if (payload) {
+        payload.evt = evt;
+      }
+    }
+
+    return payload;
+  }
+
+  function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    let cookieValue;
+
+    if (parts.length === 2) {
+      cookieValue = parts.pop().split(';').shift();
+    }
+
+    return cookieValue;
+  }
+
+  function sendDCFConsentToWindow(windowSource) {
+    const dcfCookies = Object.fromEntries(dcfCookiesNames.split(',').map((cookieName) => [cookieName, getCookie(cookieName) || null]));
+
+    const message = {
+      source: DCF_RELAY,
+      payload: {
+        eventName: SEND_DCF_CONSENT,
+        params: dcfCookies
+      }
+    };
+
+    windowSource.postMessage(JSON.stringify(message), '*');
+  }
+
+  function send(payload) {
+    const { eventName, params, player, evt : { source } = EMPTY_OBJ } = payload;
+
+    if (eventName === 'request-dcf-consent' && source) {
+      sendDCFConsentToWindow(source);
+    } else {
+      __dataLayer.publish.apply(__dataLayer, [namespace, eventName, ...params, player]);
+    }
+  }
+
+  function parseAndSend(evt) {
+    const payload = parseMessage(evt);
+
+    if (payload) {
+      send(payload);
+    }
+  }
+
+  function parseAndQueue(evt) {
+    const payload = parseMessage(evt);
+
+    if (payload) {
+      queuedEvents.push(payload);
+    }
+  }
+
+  function onTMSReady() {
+    clearInterval(tmsCheckInterval);
+    tmsCheckInterval = null;
+
+    const currentEmbeds = [...document.querySelectorAll(`iframe[src*="${embedPath}"]`)];
+    currentEmbeds.forEach((videoEmbed) => {
+      const { contentWindow } = videoEmbed;
+      if (contentWindow) {
+        sendDCFConsentToWindow(contentWindow);
+      }
+    });
+
+    queuedEvents.forEach((queuedEvent) => {
+      send(queuedEvent);
+    });
+    queuedEvents = [];
+
+    document.removeEventListener('tms.ready', onTMSReady);
+    window.removeEventListener('message', parseAndQueue);
+    window.addEventListener('message', parseAndSend, { passive: true });
+  }
+
+  if (pollForTMS) {
+    tmsCheckInterval = setInterval(() => {
+      if (typeof __dataLayer !== 'undefined' && __dataLayer.publish) {
+        onTMSReady();
+      }
+    }, pollRate);
+  }
+
+  document.addEventListener('tms.ready', onTMSReady, { once: true, passive: true });
+  window.addEventListener('message', parseAndQueue, { passive: true });
+})(window);
