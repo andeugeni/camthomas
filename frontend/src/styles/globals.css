@@ -1,0 +1,54 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400&family=Barlow+Condensed:wght@300;400;500;600;700;800;900&family=Barlow:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg:        #0a0b0d;
+  --bg2:       #111318;
+  --bg3:       #181c23;
+  --border:    #1e2430;
+  --border2:   #252d3a;
+  --text:      #e8ecf1;
+  --text2:     #8a95a3;
+  --text3:     #505a69;
+  --accent:    #3b7eff;
+  --accent2:   #2560d4;
+  --good:      #34d399;
+  --mid:       #fbbf24;
+  --bad:       #f87171;
+  --proj:      #a78bfa;
+  --ci:        rgba(167, 139, 250, 0.12);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { font-size: 14px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Barlow', sans-serif;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* Mono utility */
+.mono { font-family: 'DM Mono', monospace; }
+
+/* Condensed utility */
+.cond { font-family: 'Barlow Condensed', sans-serif; }
+
+/* Fade-in animation */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up {
+  animation: fadeUp 0.3s ease forwards;
+}
