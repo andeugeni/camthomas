@@ -77,7 +77,11 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
     ...actuals.map(d => d.actual),
     ...projData.map(d => d.hi),
   ].filter(v => v > 0);
-  const maxVal = allVals.length > 0 ? Math.max(...allVals) * 1.2 : 60;
+  const maxVal = Math.floor(allVals.length > 0 ? Math.max(...allVals) * 1.2 : 60);
+
+  console.log(combined)
+  console.log(actuals)
+  console.log(projData)
 
   return (
     <div className={styles.chartWrap}>
@@ -119,20 +123,40 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
           />
           <ReferenceLine x={String(BASE_YEAR)} stroke="var(--border2)" strokeDasharray="3 3" />
           <Area type="monotone" dataKey="hi" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
-          <Line
-            type="monotone" dataKey="actual"
-            stroke="var(--text2)" strokeWidth={1.5}
-            dot={{ r: 2.5, fill: "var(--text2)", strokeWidth: 0 }}
-            activeDot={{ r: 4, fill: "var(--accent)" }}
-            connectNulls={false} isAnimationActive={false}
+          {/* <Line
+            type="linear" dataKey="proj"
+            stroke="#8a95a3" strokeWidth={1.5}
+            dot={{ r: 2.5, fill: "#8a95a3", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "#3b7eff" }}
+            connectNulls={true} isAnimationActive={false}
+          /> */}
+          <Area
+            type="monotone"
+            dataKey="actual"
+            stroke="#2563eb"
+            strokeWidth={3}
+            fill="transparent"
+            name="Actual"
+            activeDot={{ r: 6 }}
           />
-          <Line
-            type="monotone" dataKey="proj"
-            stroke="var(--proj)" strokeWidth={1.5} strokeDasharray="5 3"
-            dot={{ r: 2.5, fill: "var(--proj)", strokeWidth: 0 }}
+
+          {/* 3. Projected Line (Starts at 2025) */}
+          <Area
+            type="monotone"
+            dataKey="proj"
+            stroke="#8884d8"
+            strokeWidth={3}
+            strokeDasharray="5 5"
+            fill="transparent"
+            name="Projected"
+          />
+          {/* <Line
+            type="linear" dataKey="proj"
+            stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3"
+            dot={{ r: 2.5, fill: "#a78bfa", strokeWidth: 0 }}
             activeDot={{ r: 4 }}
-            connectNulls={false} isAnimationActive={false}
-          />
+            connectNulls={true} isAnimationActive={false}
+          /> */}
         </AreaChart>
       </ResponsiveContainer>
     </div>
