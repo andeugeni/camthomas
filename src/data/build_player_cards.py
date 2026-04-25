@@ -53,6 +53,10 @@ DK_WEIGHTS: dict[str, float] = {
 
 PROJ_STATS = list(DK_WEIGHTS.keys())   # ["x2p","x3p","ft","trb","ast","stl","blk","tov"]
 
+# Per-game display stats tracked in arc (actual + projected)
+# pts = (x2p*2 + x3p*3 + ft) / g, but we store components so we can compute
+ARC_DISPLAY_STATS = ["pts", "trb", "ast", "stl", "blk", "tov"]
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)s  %(message)s",
@@ -73,11 +77,6 @@ def _safe_read(path: Path, **kwargs) -> pd.DataFrame:
 
 
 def _percentile_rank(series: pd.Series, ref: pd.Series) -> pd.Series:
-    """
-    For each value in `series`, compute what percentile it falls at
-    within `ref` (the reference distribution). Returns 0–100 integers.
-    Higher = better (inversion handled separately for tov/draft_pick).
-    """
     ref_arr = ref.dropna().to_numpy()
     if len(ref_arr) == 0:
         return pd.Series(50, index=series.index)
@@ -91,7 +90,6 @@ def _percentile_rank(series: pd.Series, ref: pd.Series) -> pd.Series:
 
 
 def _fantasy_pts_from_row(df: pd.DataFrame, suffix: str = "") -> pd.Series:
-    """Compute DK fantasy pts from totals columns with optional suffix."""
     total = pd.Series(0.0, index=df.index)
     for stat, w in DK_WEIGHTS.items():
         col = f"{stat}{suffix}"
@@ -101,7 +99,6 @@ def _fantasy_pts_from_row(df: pd.DataFrame, suffix: str = "") -> pd.Series:
 
 
 def _fantasy_pts_per_game(df: pd.DataFrame, suffix: str = "", g_col: str = "g") -> pd.Series:
-    """Season-total DK pts divided by games played."""
     raw = _fantasy_pts_from_row(df, suffix)
     if g_col in df.columns:
         g = df[g_col].replace(0, np.nan)
@@ -109,15 +106,16 @@ def _fantasy_pts_per_game(df: pd.DataFrame, suffix: str = "", g_col: str = "g") 
     return raw
 
 
+def _pts_from_components(x2p: pd.Series, x3p: pd.Series, ft: pd.Series) -> pd.Series:
+    """Compute total points from made shot components."""
+    return x2p * 2 + x3p * 3 + ft
+
+
 # ---------------------------------------------------------------------------
 # Step 1 — Load 2025 projections output + totals
 # ---------------------------------------------------------------------------
 
 def load_2025_projections(base_year: int) -> pd.DataFrame:
-    """
-    Attempt to load the SPS projection output for base_year.
-    Falls back to building it on the fly from raw totals if not cached.
-    """
     proj_cache = PROCESSED_DIR / f"sps_projections_{base_year}.csv"
     if proj_cache.exists():
         log.info("Loading cached projections: %s", proj_cache)
@@ -147,21 +145,16 @@ def load_raw_totals(base_year: int) -> pd.DataFrame:
     df = _safe_read(path)
     if df.empty:
         return df
-    # Compute mpg if missing
     if "mpg" not in df.columns and "mp" in df.columns and "g" in df.columns:
         df["mpg"] = df["mp"] / df["g"].replace(0, np.nan)
     return df
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — Load bio data (height, weight, draft position)
+# Step 2 — Load bio data
 # ---------------------------------------------------------------------------
 
 def load_bio(base_year: int) -> pd.DataFrame:
-    """
-    Load player_bio.csv — a single file containing all players.
-    Expected columns: player_id, ht_inches, wt, draft_pick.
-    """
     path = RAW_DIR / "player_bio.csv"
     bio = _safe_read(path)
 
@@ -179,12 +172,11 @@ def load_bio(base_year: int) -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 
 def load_advanced(base_year: int) -> pd.DataFrame:
-    path = RAW_DIR / f"advanced_{base_year}.csv"
+    path = RAW_DIR / f"player_advanced_{base_year}.csv"
     df = _safe_read(path)
     if df.empty:
         return df
 
-    # Normalise common column aliases
     rename_map = {
         "ts%": "ts_pct", "ts_percent": "ts_pct",
         "usg%": "usg_pct", "usg_percent": "usg_pct",
@@ -198,7 +190,6 @@ def load_advanced(base_year: int) -> pd.DataFrame:
     }
     df.columns = [rename_map.get(c.lower(), c.lower()) for c in df.columns]
 
-    # Dedup multi-team players (keep TOT / combined row)
     if "tm" in df.columns:
         combined = df[df["tm"].str.upper().isin(["TOT", "2TM", "3TM"])]
         others   = df[~df["player_id"].isin(combined["player_id"])]
@@ -209,12 +200,10 @@ def load_advanced(base_year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — Compute shooting tendency columns from totals
+# Step 4 — Compute shooting tendency columns
 # ---------------------------------------------------------------------------
 
 def add_tendency_cols(df: pd.DataFrame, year: int) -> pd.DataFrame:
-    """Add x3_freq and ft_freq from raw attempt columns."""
-    # Column names may be absolute-year or plain depending on schema
     def _col(name: str) -> pd.Series:
         for candidate in [f"{name}_{year}", name]:
             if candidate in df.columns:
@@ -231,7 +220,7 @@ def add_tendency_cols(df: pd.DataFrame, year: int) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------------
-# Step 5 — Historical actuals arc (fantasy_pts per season, wide)
+# Step 5 — Historical actuals arc
 # ---------------------------------------------------------------------------
 
 def build_actuals_arc(
@@ -240,75 +229,105 @@ def build_actuals_arc(
     n_back: int = 7,
 ) -> pd.DataFrame:
     """
-    Return wide table: player_id, actual_{year} for base_year-n_back..base_year.
+    Return wide table: player_id, plus for each year in [base_year-n_back .. base_year]:
+        actual_fpts_{year}   — DK fantasy pts per game
+        actual_pts_{year}    — points per game
+        actual_trb_{year}    — rebounds per game
+        actual_ast_{year}    — assists per game
+        actual_stl_{year}    — steals per game
+        actual_blk_{year}    — blocks per game
+        actual_tov_{year}    — turnovers per game
     Missing seasons = NaN.
     """
-    path = PROCESSED_DIR / "historical_actuals.csv"
-    if not path.exists():
-        log.warning("historical_actuals.csv not found — arc chart will be empty.")
-        cols = {f"actual_{y}": pd.Series(np.nan, index=current_player_ids.index)
-                for y in range(base_year - n_back, base_year + 1)}
-        return pd.DataFrame({"player_id": current_player_ids, **cols})
-
-    actuals = pd.read_csv(path)
-
-    # Compute fantasy pts per season using SPS stat columns (season totals)
-    # actuals has {stat}_y0 etc. but we need per-season absolute values.
-    # Fall back to raw totals if actuals stores season totals differently.
     years = list(range(base_year - n_back, base_year + 1))
 
-    # Build arc: for each player_id+snapshot_year combo, derive fpts
-    # snapshot_year = the season whose y0 stats are recorded
+    path = PROCESSED_DIR / "historical_actuals.csv"
     stat_cols_y0 = [f"{s}_y0" for s in PROJ_STATS]
-    if all(c in actuals.columns for c in stat_cols_y0):
-        # Each snapshot_year row has actual y0 totals — compute season fpts
-        actuals["fpts_season"] = _fantasy_pts_from_row(actuals, "_y0")
-        # Compute per-game if g_y0 is available
-        if "g_y0" in actuals.columns:
-            actuals["fpts_season"] = actuals["fpts_season"] / actuals["g_y0"].replace(0, np.nan)
-        elif "mpg_y0" in actuals.columns:
-            # proxy: fpts per 36 scaled by mpg
-            pass   # leave as totals; frontend can normalise
 
-        arc = actuals[actuals["player_id"].isin(current_player_ids)].copy()
-        arc = arc[["player_id", "snapshot_year", "fpts_season"]].drop_duplicates()
-        wide = arc.pivot(index="player_id", columns="snapshot_year", values="fpts_season")
-        wide.columns = [f"actual_{int(c)}" for c in wide.columns]
-        wide = wide.reset_index()
+    if path.exists():
+        actuals = pd.read_csv(path)
+        if all(c in actuals.columns for c in stat_cols_y0):
+            arc = actuals[actuals["player_id"].isin(current_player_ids)].copy()
+            arc = arc[["player_id", "snapshot_year"] +
+                      [c for c in actuals.columns if c.endswith("_y0")]].drop_duplicates(
+                          subset=["player_id", "snapshot_year"])
 
-        # Keep only target years
-        keep = ["player_id"] + [f"actual_{y}" for y in years if f"actual_{y}" in wide.columns]
-        wide = wide[keep]
-        # Fill missing year columns with NaN
+            g_col = "g_y0"
+            has_g = g_col in arc.columns
+
+            # Compute per-game stats from y0 columns
+            arc["fpts_pg"] = _fantasy_pts_from_row(arc, "_y0")
+            if has_g:
+                g = arc[g_col].replace(0, np.nan)
+                arc["fpts_pg"] = arc["fpts_pg"] / g
+                for stat in ["trb", "ast", "stl", "blk", "tov"]:
+                    col = f"{stat}_y0"
+                    arc[f"{stat}_pg"] = arc[col].fillna(0) / g if col in arc.columns else np.nan
+                # pts = x2p*2 + x3p*3 + ft
+                x2p = arc.get("x2p_y0", pd.Series(0.0, index=arc.index)).fillna(0)
+                x3p = arc.get("x3p_y0", pd.Series(0.0, index=arc.index)).fillna(0)
+                ft  = arc.get("ft_y0",  pd.Series(0.0, index=arc.index)).fillna(0)
+                arc["pts_pg"] = _pts_from_components(x2p, x3p, ft) / g
+            else:
+                for stat in ["pts", "trb", "ast", "stl", "blk", "tov"]:
+                    arc[f"{stat}_pg"] = np.nan
+
+            # Pivot each metric wide
+            result = arc[["player_id"]].drop_duplicates()
+            for metric in ["fpts", "pts", "trb", "ast", "stl", "blk", "tov"]:
+                pg_col = f"{metric}_pg"
+                pivot = arc.pivot(index="player_id", columns="snapshot_year", values=pg_col)
+                pivot.columns = [f"actual_{metric}_{int(c)}" for c in pivot.columns]
+                # Keep only target years
+                keep = [f"actual_{metric}_{y}" for y in years if f"actual_{metric}_{y}" in pivot.columns]
+                pivot = pivot[keep]
+                result = result.merge(pivot.reset_index(), on="player_id", how="left")
+
+            # Fill missing year columns
+            for y in years:
+                for metric in ["fpts", "pts", "trb", "ast", "stl", "blk", "tov"]:
+                    col = f"actual_{metric}_{y}"
+                    if col not in result.columns:
+                        result[col] = np.nan
+
+            return result
+
+    # Fallback: load raw totals year by year
+    log.warning("historical_actuals.csv missing or incomplete — loading raw totals per year.")
+    all_frames = {}
+    for y in years:
+        raw = _safe_read(RAW_DIR / f"player_totals_{y}.csv")
+        if raw.empty or "player_id" not in raw.columns:
+            continue
+        raw = raw[raw["player_id"].isin(current_player_ids)].copy()
+        g = raw["g"].replace(0, np.nan) if "g" in raw.columns else pd.Series(np.nan, index=raw.index)
+
+        raw[f"actual_fpts_{y}"] = _fantasy_pts_from_row(raw) / g
+        x2p = raw.get("x2p", pd.Series(0.0, index=raw.index)).fillna(0)
+        x3p = raw.get("x3p", pd.Series(0.0, index=raw.index)).fillna(0)
+        ft  = raw.get("ft",  pd.Series(0.0, index=raw.index)).fillna(0)
+        raw[f"actual_pts_{y}"] = _pts_from_components(x2p, x3p, ft) / g
+        for stat in ["trb", "ast", "stl", "blk", "tov"]:
+            raw[f"actual_{stat}_{y}"] = raw[stat].fillna(0) / g if stat in raw.columns else np.nan
+
+        keep_cols = ["player_id"] + [f"actual_{m}_{y}" for m in ["fpts", "pts", "trb", "ast", "stl", "blk", "tov"]]
+        keep_cols = [c for c in keep_cols if c in raw.columns]
+        all_frames[y] = raw[keep_cols].set_index("player_id")
+
+    if not all_frames:
+        result = pd.DataFrame({"player_id": current_player_ids})
         for y in years:
-            col = f"actual_{y}"
-            if col not in wide.columns:
-                wide[col] = np.nan
-        return wide
-    else:
-        # Fallback: try loading raw totals year by year
-        rows = {}
-        for y in years:
-            raw = _safe_read(RAW_DIR / f"player_totals_{y}.csv")
-            if raw.empty or "player_id" not in raw.columns:
-                continue
-            raw = raw[raw["player_id"].isin(current_player_ids)]
-            fpts = _fantasy_pts_from_row(raw)
-            if "g" in raw.columns:
-                fpts = fpts / raw["g"].replace(0, np.nan)
-            rows[y] = raw.set_index("player_id")[[]].assign(**{f"actual_{y}": fpts})
+            for metric in ["fpts", "pts", "trb", "ast", "stl", "blk", "tov"]:
+                result[f"actual_{metric}_{y}"] = np.nan
+        return result
 
-        if not rows:
-            cols = {f"actual_{y}": np.nan for y in years}
-            return pd.DataFrame({"player_id": current_player_ids, **cols})
-
-        arc = pd.concat(rows.values(), axis=1).reset_index()
-        arc.columns = ["player_id"] + [f"actual_{y}" for y in rows]
-        return arc
+    merged = pd.concat(all_frames.values(), axis=1).reset_index()
+    merged.columns.name = None
+    return merged
 
 
 # ---------------------------------------------------------------------------
-# Step 6 — SPS projected arc (y1–y5 from historical_sps_projections.csv)
+# Step 6 — SPS projected arc (y1–y5)
 # ---------------------------------------------------------------------------
 
 def build_projection_arc(
@@ -317,27 +336,34 @@ def build_projection_arc(
     n_future: int = 5,
 ) -> pd.DataFrame:
     """
-    Pull proj_y1..proj_y5 and CI bands for current players from the
-    historical SPS projections table (snapshot_year == base_year).
+    Pull proj_y1..proj_y5 for current players. For each future year produces:
+        proj_fpts_y{i}  — DK fantasy pts per game
+        proj_pts_y{i}   — points per game
+        proj_trb_y{i}   — rebounds per game
+        proj_ast_y{i}   — assists per game
+        proj_stl_y{i}   — steals per game
+        proj_blk_y{i}   — blocks per game
+        proj_tov_y{i}   — turnovers per game
+        ci_lo_y{i}, ci_hi_y{i}  — ±20% CI on fpts
     """
     path = PROCESSED_DIR / "historical_sps_projections.csv"
-    empty_cols = (
-        [f"proj_y{i}" for i in range(1, n_future + 1)] +
-        [f"ci_lo_y{i}" for i in range(1, n_future + 1)] +
-        [f"ci_hi_y{i}" for i in range(1, n_future + 1)]
-    )
+
+    all_cols = []
+    for i in range(1, n_future + 1):
+        all_cols += [f"proj_fpts_y{i}", f"proj_pts_y{i}"]
+        all_cols += [f"proj_{s}_y{i}" for s in ["trb", "ast", "stl", "blk", "tov"]]
+        all_cols += [f"ci_lo_y{i}", f"ci_hi_y{i}"]
 
     if not path.exists():
         log.warning("historical_sps_projections.csv not found — arc will be stub.")
         df_empty = pd.DataFrame({"player_id": current_player_ids})
-        for c in empty_cols:
+        for c in all_cols:
             df_empty[c] = np.nan
         return df_empty
 
     proj_hist = pd.read_csv(path)
 
-    # Filter to current players at the most recent snapshot year available
-    # (ideally snapshot_year == base_year, but allow base_year-1 if missing)
+    subset = pd.DataFrame()
     for snap_yr in [base_year, base_year - 1]:
         subset = proj_hist[
             (proj_hist["player_id"].isin(current_player_ids)) &
@@ -350,34 +376,41 @@ def build_projection_arc(
     if subset.empty:
         log.warning("No matching snapshot rows — arc will be empty.")
         df_empty = pd.DataFrame({"player_id": current_player_ids})
-        for c in empty_cols:
+        for c in all_cols:
             df_empty[c] = np.nan
         return df_empty
 
-    # Compute fantasy pts for each future year from {stat}_y{i} columns
-    result = subset[["player_id"]].copy()
+    result = subset[["player_id"]].copy().reset_index(drop=True)
 
     for i in range(1, n_future + 1):
-        stat_cols = {f"{s}_y{i}": f"{s}" for s in PROJ_STATS}
-        available = {out_stat: col for col, out_stat in stat_cols.items()
-                     if col in subset.columns}
+        mpg_col = f"mpg_y{i}"
+        mpg = subset[mpg_col].fillna(0) if mpg_col in subset.columns else pd.Series(0.0, index=subset.index)
 
-        if available:
-            fpts = pd.Series(0.0, index=subset.index)
-            for out_stat, col in available.items():
-                fpts += subset[col].fillna(0) * DK_WEIGHTS.get(out_stat, 0)
-            # Divide by games if mpg available (approximate: mpg * 82 / 36)
-            mpg_col = f"mpg_y{i}"
-            if mpg_col in subset.columns:
-                games = 82  # season game count assumption
-                fpts = fpts / 36 * subset[mpg_col].fillna(0)
-            result[f"proj_y{i}"] = fpts.values
-        else:
-            result[f"proj_y{i}"] = np.nan
+        # Fantasy pts per game
+        fpts = pd.Series(0.0, index=subset.index)
+        for stat, w in DK_WEIGHTS.items():
+            col = f"{stat}_y{i}"
+            if col in subset.columns:
+                # stat columns are per-36; convert to per-game via mpg
+                fpts += subset[col].fillna(0) / 36 * mpg * w
+        result[f"proj_fpts_y{i}"] = fpts.values
+        result[f"ci_lo_y{i}"]     = (fpts * 0.80).values
+        result[f"ci_hi_y{i}"]     = (fpts * 1.20).values
 
-        # Stub CI bands: ±20% of projection
-        result[f"ci_lo_y{i}"] = result[f"proj_y{i}"] * 0.80
-        result[f"ci_hi_y{i}"] = result[f"proj_y{i}"] * 1.20
+        # Points per game: (x2p*2 + x3p*3 + ft) per 36, scaled to mpg
+        x2p = subset.get(f"x2p_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
+        x3p = subset.get(f"x3p_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
+        ft  = subset.get(f"ft_y{i}",  pd.Series(0.0, index=subset.index)).fillna(0)
+        pts_per36 = _pts_from_components(x2p, x3p, ft)
+        result[f"proj_pts_y{i}"] = (pts_per36 / 36 * mpg).values
+
+        # Other per-game stats
+        for stat in ["trb", "ast", "stl", "blk", "tov"]:
+            col = f"{stat}_y{i}"
+            if col in subset.columns:
+                result[f"proj_{stat}_y{i}"] = (subset[col].fillna(0) / 36 * mpg).values
+            else:
+                result[f"proj_{stat}_y{i}"] = np.nan
 
     return result.reset_index(drop=True)
 
@@ -387,23 +420,21 @@ def build_projection_arc(
 # ---------------------------------------------------------------------------
 
 PCTILE_STATS = {
-    # (column_in_merged, output_name, invert)
     "ht_inches":  ("ht_pct",       False),
     "wt":         ("wt_pct",       False),
-    "draft_pick": ("draft_pct",    True),   # pick 1 → 99th
+    "draft_pick": ("draft_pct",    True),
     "ts_pct":     ("ts_pct_rank",  False),
     "ft_pct":     ("ft_pct_rank",  False),
     "usg_pct":    ("usg_pct_rank", False),
     "x3_freq":    ("x3_freq_rank", False),
     "ft_freq":    ("ft_freq_rank", False),
     "ast_pct":    ("ast_pct_rank", False),
-    "tov_pct":    ("tov_pct_rank", True),   # lower tov% is better
+    "tov_pct":    ("tov_pct_rank", True),
     "trb_pct":    ("trb_pct_rank", False),
     "blk_pct":    ("blk_pct_rank", False),
     "stl_pct":    ("stl_pct_rank", False),
 }
 
-# Also compute percentiles for the projected per-game stats
 PROJ_PG_PCTILE = [
     ("proj_x2p_pg", "proj_x2p_pct",  False),
     ("proj_x3p_pg", "proj_x3p_pct",  False),
@@ -421,14 +452,9 @@ def add_percentiles(
     df: pd.DataFrame,
     hist_ref: pd.DataFrame | None,
 ) -> pd.DataFrame:
-    """
-    For each stat, compute within-dataset percentile rank (0–100 integer).
-    If hist_ref is provided, use it as the reference distribution per age band.
-    Otherwise use the current df itself.
-    """
     def _pct_series(values: pd.Series, ref_values: pd.Series, invert: bool) -> pd.Series:
         if invert:
-            values   = -values
+            values     = -values
             ref_values = -ref_values.dropna()
         else:
             ref_values = ref_values.dropna()
@@ -451,7 +477,7 @@ def add_percentiles(
     for col, out_col, invert in PROJ_PG_PCTILE:
         if col not in df.columns:
             continue
-        ref = df[col]  # rank within current season
+        ref = df[col]
         df[out_col] = _pct_series(df[col], ref, invert)
 
     return df
@@ -474,15 +500,11 @@ def build(base_year: int = 2025) -> pd.DataFrame:
             "Run fetch.py and pipeline.py first."
         )
 
-    # Use projections as the base; fall back to raw if projections are empty
     base = proj if not proj.empty else raw.copy()
-
-    # Ensure player_id is string throughout
     base["player_id"] = base["player_id"].astype(str)
 
-    # Add per-game projected columns if they exist from projections.py output
     for stat in PROJ_STATS:
-        pg_col = f"proj_{stat}_pg"
+        pg_col    = f"proj_{stat}_pg"
         per36_col = f"proj_{stat}"
         mpg_col   = "proj_mpg"
         if pg_col not in base.columns and per36_col in base.columns and mpg_col in base.columns:
@@ -507,7 +529,6 @@ def build(base_year: int = 2025) -> pd.DataFrame:
                              "ft_pct", "bpm", "dbpm", "vorp", "per", "ws_per48"]]
         base = base.merge(adv[adv_cols], on="player_id", how="left")
 
-    # Ensure advanced cols exist even if merge produced nothing
     for col in ["ts_pct", "usg_pct", "ast_pct", "tov_pct",
                 "trb_pct", "blk_pct", "stl_pct", "ft_pct"]:
         if col not in base.columns:
@@ -527,7 +548,6 @@ def build(base_year: int = 2025) -> pd.DataFrame:
     base = base.merge(arc_proj, on="player_id", how="left")
 
     # ── 7. Percentiles ────────────────────────────────────────────────────
-    # Load historical ref for age-normed percentiles (optional)
     hist_ref = None
     hist_path = PROCESSED_DIR / "historical_sps_projections.csv"
     if hist_path.exists():
@@ -536,20 +556,24 @@ def build(base_year: int = 2025) -> pd.DataFrame:
     base = add_percentiles(base, hist_ref)
 
     # ── 8. Clean up and enforce schema order ─────────────────────────────
-    id_cols = ["player_id", "player", "age", "team", "pos"]
-    bio_cols = ["ht_inches", "wt", "draft_pick"]
-    proj_main = ["proj_mpg", "fantasy_pts"]
+    id_cols      = ["player_id", "player", "age", "team", "pos"]
+    bio_cols     = ["ht_inches", "wt", "draft_pick"]
+    proj_main    = ["proj_mpg", "fantasy_pts"]
     proj_pg_cols = [f"proj_{s}_pg" for s in PROJ_STATS]
     adv_display  = ["ts_pct", "ft_pct", "usg_pct", "x3_freq", "ft_freq",
                     "ast_pct", "tov_pct", "trb_pct", "blk_pct", "stl_pct"]
-    pct_cols = (
+    pct_cols     = (
         [v[0] for v in PCTILE_STATS.values()] +
         [x[1] for x in PROJ_PG_PCTILE]
     )
+
+    # Arc columns: actual_{metric}_{year} and proj_{metric}_y{i} / ci bands
     actual_cols = sorted([c for c in base.columns if c.startswith("actual_")])
     arc_cols    = sorted(
-        [c for c in base.columns if c.startswith("proj_y") or
-         c.startswith("ci_lo") or c.startswith("ci_hi")]
+        [c for c in base.columns
+         if c.startswith("proj_fpts_y") or c.startswith("proj_pts_y") or
+            any(c.startswith(f"proj_{s}_y") for s in ["trb", "ast", "stl", "blk", "tov"]) or
+            c.startswith("ci_lo") or c.startswith("ci_hi")]
     )
 
     ordered = []
@@ -558,7 +582,6 @@ def build(base_year: int = 2025) -> pd.DataFrame:
         if col in base.columns and col not in ordered:
             ordered.append(col)
 
-    # Append any remaining columns not in the explicit ordering
     remainder = [c for c in base.columns if c not in ordered]
     final = base[ordered + remainder]
 
@@ -569,7 +592,6 @@ def build(base_year: int = 2025) -> pd.DataFrame:
         base_year, len(final), len(final.columns), OUT_PATH,
     )
 
-    # Quick sanity print
     if "fantasy_pts" in final.columns and "player" in final.columns:
         top5 = final.nlargest(5, "fantasy_pts")[["player", "age", "proj_mpg", "fantasy_pts"]]
         log.info("Top 5 by fantasy_pts:\n%s", top5.to_string(index=False))

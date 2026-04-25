@@ -127,11 +127,11 @@ export function shortPos(pos: string): string {
 
 // ── Category from proj_y1 ────────────────────────────────────────────────────
 
-export function category(proj_y1: number): string {
-  if (proj_y1 >= 55) return "MVP candidate";
-  if (proj_y1 >= 45) return "Star";
-  if (proj_y1 >= 35) return "Starter";
-  if (proj_y1 >= 22) return "Rotation";
+export function category(proj_fpts_y1: number): string {
+  if (proj_fpts_y1 >= 55) return "MVP candidate";
+  if (proj_fpts_y1 >= 45) return "Star";
+  if (proj_fpts_y1 >= 35) return "Starter";
+  if (proj_fpts_y1 >= 22) return "Rotation";
   return "Fringe";
 }
 

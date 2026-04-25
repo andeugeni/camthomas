@@ -38,7 +38,7 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
   // Historical actuals — normalise season totals → per-game
   const ACTUAL_YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] as const;
   const actuals = ACTUAL_YEARS.map(yr => {
-    const raw = player[`actual_${yr}` as keyof PlayerCard] as number ?? 0;
+    const raw = player[`actual_fpts_${yr}` as keyof PlayerCard] as number ?? 0;
     const val = normaliseActual(raw, player.g);
     return val > 0 ? { year: String(yr), actual: val } : null;
   }).filter(Boolean) as { year: string; actual: number }[];
@@ -51,7 +51,7 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
 
   const projData = [1, 2, 3, 4, 5].map(i => ({
     year: String(BASE_YEAR + i),
-    proj: player[`proj_y${i}` as keyof PlayerCard] as number ?? 0,
+    proj: player[`proj_fpts_y${i}` as keyof PlayerCard] as number ?? 0,
     lo:   player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
     hi:   player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
   }));
@@ -123,6 +123,7 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
           />
           <ReferenceLine x={String(BASE_YEAR)} stroke="var(--border2)" strokeDasharray="3 3" />
           <Area type="monotone" dataKey="hi" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
+          <Area type="monotone" dataKey="lo" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
           {/* <Line
             type="linear" dataKey="proj"
             stroke="#8a95a3" strokeWidth={1.5}

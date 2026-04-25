@@ -1,5 +1,5 @@
 """
-historical_trajectories.py
+pipeline.py
 --------------------------
 Builds two parallel tables over all historical player-seasons (1980–2024):
 
@@ -18,8 +18,8 @@ Both tables share the same outer shape:
 
 Usage
 ~~~~~
-    python -m src.data.historical_trajectories
-    python -m src.data.historical_trajectories --start-year 1984 --end-year 2024
+    python -m src.data.pipeline
+    python -m src.data.pipeline --start-year 1984 --end-year 2024
 """
 
 import argparse
@@ -344,6 +344,9 @@ def build_snapshot_row(
         mpg = (float(row["mpg"]) if "mpg" in row.index and pd.notna(row["mpg"])
                else (float(row["mp"]) / float(row["g"]) if row is not None and float(row.get("g", 0)) > 0 else 0.0)) if row is not None else 0.0
         d[f"mpg_{suffix}"] = mpg
+
+        d[f"g_{suffix}"] = float(row["g"]) if (row is not None and "g" in row.index and pd.notna(row["g"])) else 0.0
+        
         return d
 
     lookback = {}
@@ -372,12 +375,20 @@ def build_snapshot_row(
         ]
         for stat in SPS_STATS:
             actual_forward[f"{stat}_y{i}"] = float(fut[stat].iloc[0]) if (not fut.empty and stat in fut.columns) else 0.0
+        if not fut.empty and "g" in fut.columns:
+            actual_forward[f"g_y{i}"] = float(fut["g"].iloc[0])
+        else:
+            actual_forward[f"g_y{i}"] = 0.0
+        
         if not fut.empty and "mpg" in fut.columns:
             actual_forward[f"mpg_y{i}"] = float(fut["mpg"].iloc[0])
         elif not fut.empty and "mp" in fut.columns and "g" in fut.columns and float(fut["g"].iloc[0]) > 0:
             actual_forward[f"mpg_y{i}"] = float(fut["mp"].iloc[0]) / float(fut["g"].iloc[0])
         else:
             actual_forward[f"mpg_y{i}"] = 0.0
+
+
+        
 
     proj_row   = {**base, **lookback, **proj_forward}
     actual_row = {**base, **lookback, **actual_forward}
