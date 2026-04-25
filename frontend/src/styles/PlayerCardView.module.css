@@ -296,3 +296,81 @@
   border-radius: 2px;
   transition: width 0.4s ease;
 }
+
+.compGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+@media (max-width: 900px) {
+  .compGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compCard {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition: border-color 0.15s;
+}
+
+.compCard:hover {
+  border-color: var(--border2);
+}
+
+.compHeader {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.compRank {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text3);
+  min-width: 14px;
+  padding-top: 2px;
+  letter-spacing: 0.02em;
+}
+
+.compMeta {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.compName {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+.compSub {
+  font-size: 0.62rem;
+  color: var(--text3);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-family: "DM Mono", monospace;
+}
+
+.compSim {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  padding-top: 1px;
+}

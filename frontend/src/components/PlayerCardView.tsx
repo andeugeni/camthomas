@@ -35,7 +35,6 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
   const BASE_YEAR = player.season ?? 2025;
   const fpts = currentFantasyPts(player);
 
-  // Historical actuals — normalise season totals → per-game
   const ACTUAL_YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] as const;
   const actuals = ACTUAL_YEARS.map(yr => {
     const raw = player[`actual_fpts_${yr}` as keyof PlayerCard] as number ?? 0;
@@ -43,7 +42,6 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
     return val > 0 ? { year: String(yr), actual: val } : null;
   }).filter(Boolean) as { year: string; actual: number }[];
 
-  // Replace the current-year actual with computed fpts if it's 0
   const hasCurrentActual = actuals.some(a => a.year === String(BASE_YEAR));
   if (!hasCurrentActual && fpts > 0) {
     actuals.push({ year: String(BASE_YEAR), actual: fpts });
@@ -56,7 +54,6 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
     hi:   player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
   }));
 
-  // Bridge: last actual point also starts the proj line
   const lastActual = actuals[actuals.length - 1];
   const combined = [
     ...actuals.slice(0, -1).map(d => ({
@@ -78,10 +75,6 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
     ...projData.map(d => d.hi),
   ].filter(v => v > 0);
   const maxVal = Math.floor(allVals.length > 0 ? Math.max(...allVals) * 1.2 : 60);
-
-  console.log(combined)
-  console.log(actuals)
-  console.log(projData)
 
   return (
     <div className={styles.chartWrap}>
@@ -124,55 +117,118 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
           <ReferenceLine x={String(BASE_YEAR)} stroke="var(--border2)" strokeDasharray="3 3" />
           <Area type="monotone" dataKey="hi" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
           <Area type="monotone" dataKey="lo" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
-          {/* <Line
-            type="linear" dataKey="proj"
-            stroke="#8a95a3" strokeWidth={1.5}
-            dot={{ r: 2.5, fill: "#8a95a3", strokeWidth: 0 }}
-            activeDot={{ r: 4, fill: "#3b7eff" }}
-            connectNulls={true} isAnimationActive={false}
-          /> */}
           <Area
-            type="monotone"
-            dataKey="actual"
-            stroke="#2563eb"
-            strokeWidth={3}
-            fill="transparent"
-            name="Actual"
-            activeDot={{ r: 6 }}
+            type="monotone" dataKey="actual"
+            stroke="#2563eb" strokeWidth={3} fill="transparent"
+            name="Actual" activeDot={{ r: 6 }}
           />
-
-          {/* 3. Projected Line (Starts at 2025) */}
           <Area
-            type="monotone"
-            dataKey="proj"
-            stroke="#8884d8"
-            strokeWidth={3}
-            strokeDasharray="5 5"
-            fill="transparent"
-            name="Projected"
+            type="monotone" dataKey="proj"
+            stroke="#8884d8" strokeWidth={3} strokeDasharray="5 5"
+            fill="transparent" name="Projected"
           />
-          {/* <Line
-            type="linear" dataKey="proj"
-            stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 3"
-            dot={{ r: 2.5, fill: "#a78bfa", strokeWidth: 0 }}
-            activeDot={{ r: 4 }}
-            connectNulls={true} isAnimationActive={false}
-          /> */}
         </AreaChart>
       </ResponsiveContainer>
     </div>
   );
 }
 
+// ── CompSparkline ─────────────────────────────────────────────────────────────
+
+function CompSparkline({ trajectory }: { trajectory: (number | null)[] }) {
+  // trajectory = [ym3, ym2, ym1, y0, y1, y2, y3]
+  const labels = ["−3", "−2", "−1", "0", "+1", "+2", "+3"];
+  const data = trajectory.map((v, i) => ({ x: labels[i], v }));
+
+  const vals = trajectory.filter((v): v is number => v !== null && v > 0);
+  const maxV = vals.length > 0 ? Math.max(...vals) : 30;
+
+  return (
+    <ResponsiveContainer width="100%" height={52}>
+      <LineChart data={data} margin={{ top: 4, right: 2, bottom: 0, left: 2 }}>
+        <ReferenceLine x="0" stroke="var(--border2)" strokeDasharray="2 2" />
+        <Line
+          type="monotone" dataKey="v"
+          stroke="var(--proj)" strokeWidth={1.5}
+          dot={false} connectNulls
+          isAnimationActive={false}
+        />
+        <YAxis domain={[0, Math.ceil(maxV * 1.15)]} hide />
+        <XAxis dataKey="x" hide />
+        <Tooltip
+          contentStyle={{
+            background: "var(--bg2)", border: "1px solid var(--border2)",
+            borderRadius: 4, fontSize: 10, fontFamily: "DM Mono", padding: "2px 6px",
+          }}
+          labelStyle={{ color: "var(--text3)", fontSize: 9 }}
+          itemStyle={{ color: "var(--text)" }}
+          formatter={(val: number) => [val?.toFixed(1) ?? "—", "fpts/g"]}
+        />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// ── CompsSection ──────────────────────────────────────────────────────────────
+
+export type PlayerComp = {
+  rank: number;
+  player: string;
+  player_id: string;
+  comp_year: number;
+  comp_age: number;
+  similarity: number;           // 0–100
+  trajectory: (number | null)[]; // 7 values: ym3 ym2 ym1 y0 y1 y2 y3
+};
+
+function simColor(score: number): string {
+  if (score >= 80) return "var(--good)";
+  if (score >= 55) return "var(--avg, #f59e0b)";
+  return "var(--text3)";
+}
+
+function CompsSection({ comps }: { comps: PlayerComp[] }) {
+  if (!comps || comps.length === 0) return null;
+
+  return (
+    <section className={styles.section}>
+      <h3 className={`${styles.sectionTitle} cond`}>10 Most Comparable Players</h3>
+      <div className={styles.compGrid}>
+        {comps.map((comp) => (
+          <div key={comp.player_id + comp.comp_year} className={styles.compCard}>
+            <div className={styles.compHeader}>
+              <span className={styles.compRank}>{comp.rank}</span>
+              <div className={styles.compMeta}>
+                <span className={`${styles.compName} cond`}>{comp.player}</span>
+                <span className={styles.compSub}>
+                  YEAR: {comp.comp_year} · AGE: {comp.comp_age}
+                </span>
+              </div>
+              <span
+                className={`${styles.compSim} mono`}
+                style={{ color: simColor(comp.similarity) }}
+              >
+                {comp.similarity.toFixed(0)}
+              </span>
+            </div>
+            <CompSparkline trajectory={comp.trajectory} />
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function PlayerCardView({ player }: { player: PlayerCard }) {
+export default function PlayerCardView({ player, comps }: {
+  player: PlayerCard;
+  comps?: PlayerComp[];
+}) {
   const pg    = perGame(player);
   const fpts  = currentFantasyPts(player);
   const ts    = trueShooting(player);
   const ftPct_ = ftPct(player);
-
-  // Points per game from raw: (x2p*2 + x3p*3 + ft*1) / g
   const pts_pg = pg.pts;
 
   return (
@@ -206,7 +262,6 @@ export default function PlayerCardView({ player }: { player: PlayerCard }) {
         {/* ── Left col ─────────────────────────────────── */}
         <div className={styles.leftCol}>
 
-          {/* Vitals */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Vitals</h3>
             <div className={styles.vitalGrid}>
@@ -215,74 +270,30 @@ export default function PlayerCardView({ player }: { player: PlayerCard }) {
             </div>
           </section>
 
-          {/* Scoring */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Scoring</h3>
-            <StatBar
-              label="True Shoot %"
-              value={fmtPct(ts)}
-              rank={player.ts_pct_rank ?? 50}
-            />
-            <StatBar
-              label="Free Throw %"
-              value={fmtPct(ftPct_)}
-              rank={player.ft_pct_rank ?? 50}
-            />
-            <StatBar
-              label="Usage %"
-              value={fmtPct(player.usg_pct)}
-              rank={player.usg_pct_rank ?? 50}
-            />
+            <StatBar label="True Shoot %" value={fmtPct(ts)}           rank={player.ts_pct_rank ?? 50} />
+            <StatBar label="Free Throw %" value={fmtPct(ftPct_)}       rank={player.ft_pct_rank ?? 50} />
+            <StatBar label="Usage %"      value={fmtPct(player.usg_pct)} rank={player.usg_pct_rank ?? 50} />
           </section>
 
-          {/* Tendencies */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Tendencies</h3>
-            <StatBar
-              label="3PT Freq"
-              value={fmtPct(player.x3_freq)}
-              rank={player.x3_freq_rank ?? 50}
-            />
-            <StatBar
-              label="FT Freq"
-              value={fmtPct(player.ft_freq)}
-              rank={player.ft_freq_rank ?? 50}
-            />
+            <StatBar label="3PT Freq" value={fmtPct(player.x3_freq)}  rank={player.x3_freq_rank ?? 50} />
+            <StatBar label="FT Freq"  value={fmtPct(player.ft_freq)}  rank={player.ft_freq_rank ?? 50} />
           </section>
 
-          {/* Passing */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Passing / Ball Handling</h3>
-            <StatBar
-              label="Assist %"
-              value={fmtPct(player.ast_pct)}
-              rank={player.ast_pct_rank ?? 50}
-            />
-            <StatBar
-              label="Turnover %"
-              value={fmtPct(player.tov_pct)}
-              rank={100 - (player.tov_pct_rank ?? 50)}  // lower TOV = better
-            />
+            <StatBar label="Assist %"   value={fmtPct(player.ast_pct)} rank={player.ast_pct_rank ?? 50} />
+            <StatBar label="Turnover %" value={fmtPct(player.tov_pct)} rank={100 - (player.tov_pct_rank ?? 50)} />
           </section>
 
-          {/* Defense */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Defense / Rebounding</h3>
-            <StatBar
-              label="Rebound %"
-              value={fmtPct(player.trb_pct)}
-              rank={player.trb_pct_rank ?? 50}
-            />
-            <StatBar
-              label="Block %"
-              value={fmtPct(player.blk_pct)}
-              rank={player.blk_pct_rank ?? 50}
-            />
-            <StatBar
-              label="Steal %"
-              value={fmtPct(player.stl_pct)}
-              rank={player.stl_pct_rank ?? 50}
-            />
+            <StatBar label="Rebound %" value={fmtPct(player.trb_pct)} rank={player.trb_pct_rank ?? 50} />
+            <StatBar label="Block %"   value={fmtPct(player.blk_pct)} rank={player.blk_pct_rank ?? 50} />
+            <StatBar label="Steal %"   value={fmtPct(player.stl_pct)} rank={player.stl_pct_rank ?? 50} />
           </section>
         </div>
 
@@ -291,26 +302,27 @@ export default function PlayerCardView({ player }: { player: PlayerCard }) {
 
           <ProjectionChart player={player} />
 
-          {/* Per-game this season */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>This Season · Per Game</h3>
             <div className={styles.projGrid}>
-              <ProjStat label="PTS"  value={fmtNum(pts_pg)} />
-              <ProjStat label="REB"  value={fmtNum(pg.trb)} />
-              <ProjStat label="AST"  value={fmtNum(pg.ast)} />
-              <ProjStat label="3PM"  value={fmtNum(pg.x3p)} />
-              <ProjStat label="FTM"  value={fmtNum(pg.ft)} />
-              <ProjStat label="STL"  value={fmtNum(pg.stl)} />
-              <ProjStat label="BLK"  value={fmtNum(pg.blk)} />
-              <ProjStat label="TOV"  value={fmtNum(pg.tov)} neg />
+              <ProjStat label="PTS" value={fmtNum(pts_pg)} />
+              <ProjStat label="REB" value={fmtNum(pg.trb)} />
+              <ProjStat label="AST" value={fmtNum(pg.ast)} />
+              <ProjStat label="3PM" value={fmtNum(pg.x3p)} />
+              <ProjStat label="FTM" value={fmtNum(pg.ft)} />
+              <ProjStat label="STL" value={fmtNum(pg.stl)} />
+              <ProjStat label="BLK" value={fmtNum(pg.blk)} />
+              <ProjStat label="TOV" value={fmtNum(pg.tov)} neg />
             </div>
           </section>
 
-          {/* 5-year table */}
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>5-Year Projection · Fpts/G</h3>
             <FiveYearTable player={player} baseYear={player.season ?? 2025} />
           </section>
+
+          {/* ── Comps ──────────────────────────────────── */}
+          {comps && <CompsSection comps={comps} />}
 
         </div>
       </div>
@@ -332,10 +344,7 @@ function VitalRow({ label, value }: { label: string; value: string }) {
 function ProjStat({ label, value, neg }: { label: string; value: string; neg?: boolean }) {
   return (
     <div className={styles.projStat}>
-      <span
-        className={`${styles.projStatVal} mono`}
-        style={{ color: neg ? "var(--bad)" : "var(--text)" }}
-      >
+      <span className={`${styles.projStatVal} mono`} style={{ color: neg ? "var(--bad)" : "var(--text)" }}>
         {value}
       </span>
       <span className={styles.projStatLabel}>{label}</span>
@@ -346,10 +355,10 @@ function ProjStat({ label, value, neg }: { label: string; value: string; neg?: b
 function FiveYearTable({ player, baseYear }: { player: PlayerCard; baseYear: number }) {
   const rows = [1, 2, 3, 4, 5].map(i => ({
     season: `${baseYear + i - 1}–${String(baseYear + i).slice(2)}`,
-    age:    player.age + i,
-    proj:   player[`proj_y${i}` as keyof PlayerCard] as number ?? 0,
-    lo:     player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
-    hi:     player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
+    age:  player.age + i,
+    proj: player[`proj_y${i}` as keyof PlayerCard] as number ?? 0,
+    lo:   player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
+    hi:   player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
   }));
 
   const maxVal = Math.max(...rows.map(r => r.proj), 1);
@@ -357,9 +366,7 @@ function FiveYearTable({ player, baseYear }: { player: PlayerCard; baseYear: num
   return (
     <table className={styles.fiveYearTable}>
       <thead>
-        <tr>
-          <th>Season</th><th>Age</th><th>Proj</th><th>Range</th><th></th>
-        </tr>
+        <tr><th>Season</th><th>Age</th><th>Proj</th><th>Range</th><th></th></tr>
       </thead>
       <tbody>
         {rows.map(r => (
@@ -374,10 +381,7 @@ function FiveYearTable({ player, baseYear }: { player: PlayerCard; baseYear: num
             </td>
             <td>
               <div className={styles.miniBar}>
-                <div
-                  className={styles.miniBarFill}
-                  style={{ width: `${(r.proj / (maxVal * 1.1)) * 100}%` }}
-                />
+                <div className={styles.miniBarFill} style={{ width: `${(r.proj / (maxVal * 1.1)) * 100}%` }} />
               </div>
             </td>
           </tr>

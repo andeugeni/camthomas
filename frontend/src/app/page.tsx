@@ -5,6 +5,9 @@ import { MOCK_PLAYERS, PlayerCard } from "@/data/mockPlayers";
 import { currentFantasyPts, shortTeam, shortPos } from "@/data/playerUtils";
 import PlayerCardView from "@/components/PlayerCardView";
 import styles from "@/styles/page.module.css";
+import simData from "@/data/similarities.json";
+
+
 
 // ── Data source ───────────────────────────────────────────────────────────────
 // build_player_cards.py writes frontend/src/data/players.json.
@@ -23,6 +26,8 @@ const PLAYERS = [...RAW_PLAYERS].sort(
   (a, b) => (b.proj_y1 ?? 0) - (a.proj_y1 ?? 0)
 );
 
+
+
 const IS_MOCK = RAW_PLAYERS === MOCK_PLAYERS;
 
 function rankColor(rank: number, total: number) {
@@ -35,6 +40,7 @@ function rankColor(rank: number, total: number) {
 export default function Home() {
   const [search,   setSearch]   = useState("");
   const [selected, setSelected] = useState<PlayerCard>(PLAYERS[0]);
+  const comps = (simData as Record<string, { comps: any[] }>)[selected.player_id]?.comps ?? [];
 
   const filtered = useMemo(() =>
     PLAYERS.filter(p =>
@@ -42,6 +48,7 @@ export default function Home() {
       shortTeam(p.tm).toLowerCase().includes(search.toLowerCase()) ||
       shortPos(p.pos).toLowerCase().includes(search.toLowerCase()) ||
       p.pos?.toLowerCase().includes(search.toLowerCase())
+      
     ),
     [search]
   );
@@ -107,7 +114,7 @@ export default function Home() {
 
       {/* ── Main card ──────────────────────────────────── */}
       <main className={styles.main}>
-        <PlayerCardView key={selected.player_id} player={selected} />
+        <PlayerCardView key={selected.player_id} player={selected} comps={comps} />
       </main>
     </div>
   );
