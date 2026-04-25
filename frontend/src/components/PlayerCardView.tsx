@@ -208,7 +208,7 @@ function CompsSection({ comps }: { comps: PlayerComp[] }) {
                 className={`${styles.compSim} mono`}
                 style={{ color: simColor(comp.similarity) }}
               >
-                {comp.similarity.toFixed(0)}
+                SIMILARITY SCORE: {comp.similarity.toFixed(0)}
               </span>
             </div>
             <CompSparkline trajectory={comp.trajectory} />
