@@ -25,10 +25,15 @@ function getProj(player: PlayerCard, model: ProjectionModel, i: number): number 
 
 // ── ModelToggle ───────────────────────────────────────────────────────────────
 
-function ModelToggle({ model, onChange }: {
+// 1. Add player to the Type definition
+interface ModelToggleProps {
   model: ProjectionModel;
   onChange: (m: ProjectionModel) => void;
-}) {
+  player: any; // Ideally, replace 'any' with your actual Player type
+}
+
+// 2. Destructure 'player' from the props
+function ModelToggle({ model, onChange, player }: ModelToggleProps) {
   return (
     <div className={styles.modelToggle}>
       <button
@@ -40,7 +45,8 @@ function ModelToggle({ model, onChange }: {
       <button
         className={`${styles.modelBtn} ${model === "carmelo" ? styles.modelBtnActive : ""}`}
         onClick={() => onChange("carmelo")}
-        disabled={player => !player?.carmelo_y1}
+        // 3. Now 'player' is defined and accessible here!
+        disabled={!player?.carmelo_y1}
       >
         CARMELO
       </button>
