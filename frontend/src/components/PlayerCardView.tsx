@@ -1,15 +1,52 @@
 "use client";
 
+import { useState } from "react";
 import { PlayerCard } from "@/data/mockPlayers";
 import {
   currentFantasyPts, perGame, trueShooting, ftPct,
-  fmtPct, fmtNum, pctColor, shortTeam, shortPos, category, normaliseActual,
+  fmtPct, fmtNum, pctColor, shortTeam, shortPos, normaliseActual,
 } from "@/data/playerUtils";
 import {
   AreaChart, Area, LineChart, Line,
   XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from "recharts";
 import styles from "@/styles/PlayerCardView.module.css";
+
+// ── Model type ────────────────────────────────────────────────────────────────
+
+type ProjectionModel = "sps" | "carmelo";
+
+function getProj(player: PlayerCard, model: ProjectionModel, i: number): number {
+  if (model === "carmelo") {
+    return (player[`carmelo_y${i}` as keyof PlayerCard] as number | null) ?? 0;
+  }
+  return (player[`proj_fpts_y${i}` as keyof PlayerCard] as number) ?? 0;
+}
+
+// ── ModelToggle ───────────────────────────────────────────────────────────────
+
+function ModelToggle({ model, onChange }: {
+  model: ProjectionModel;
+  onChange: (m: ProjectionModel) => void;
+}) {
+  return (
+    <div className={styles.modelToggle}>
+      <button
+        className={`${styles.modelBtn} ${model === "sps" ? styles.modelBtnActive : ""}`}
+        onClick={() => onChange("sps")}
+      >
+        SPS
+      </button>
+      <button
+        className={`${styles.modelBtn} ${model === "carmelo" ? styles.modelBtnActive : ""}`}
+        onClick={() => onChange("carmelo")}
+        disabled={player => !player?.carmelo_y1}
+      >
+        CARMELO
+      </button>
+    </div>
+  );
+}
 
 // ── StatBar ──────────────────────────────────────────────────────────────────
 
@@ -31,59 +68,59 @@ function StatBar({ label, value, rank }: {
 
 // ── ProjectionChart ───────────────────────────────────────────────────────────
 
-function ProjectionChart({ player }: { player: PlayerCard }) {
-  const BASE_YEAR = player.season ?? 2026;
-  const fpts = currentFantasyPts(player);
+function ProjectionChart({ player, model }: { player: PlayerCard; model: ProjectionModel }) {
+  const BASE_YEAR = 2026;
 
   const ACTUAL_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
-  const actuals = ACTUAL_YEARS.map(yr => {
-    const raw = player[`actual_fpts_${yr}` as keyof PlayerCard] as number ?? 0;
-    const val = normaliseActual(raw, player.g);
-    return val > 0 ? { year: String(yr), actual: val } : null;
-  }).filter(Boolean) as { year: string; actual: number }[];
 
-  const hasCurrentActual = actuals.some(a => a.year === String(BASE_YEAR));
-  if (!hasCurrentActual && fpts > 0) {
-    actuals.push({ year: String(BASE_YEAR), actual: fpts });
-  }
+  const actuals = ACTUAL_YEARS.map(yr => {
+    const raw = player[`actual_fpts_${yr}` as keyof PlayerCard] as number | null;
+    const val = raw != null ? normaliseActual(raw, player.g) : (yr === BASE_YEAR ? 0 : null);
+    if (val === null) return null;
+    return { year: String(yr), actual: val };
+  }).filter((d): d is { year: string; actual: number } => d !== null);
 
   const projData = [1, 2, 3, 4, 5].map(i => ({
     year: String(BASE_YEAR + i),
-    proj: player[`proj_fpts_y${i}` as keyof PlayerCard] as number ?? 0,
+    proj: getProj(player, model, i),
     lo:   player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
     hi:   player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
   }));
 
-  const lastActual = actuals[actuals.length - 1];
-  const combined = [
-    ...actuals.slice(0, -1).map(d => ({
-      year: d.year, actual: d.actual,
-      proj: null as number | null, lo: null as number | null, hi: null as number | null,
-    })),
-    lastActual ? {
-      year: lastActual.year, actual: lastActual.actual,
-      proj: lastActual.actual, lo: lastActual.actual, hi: lastActual.actual,
-    } : { year: String(BASE_YEAR), actual: null, proj: null, lo: null, hi: null },
-    ...projData.map(d => ({
-      year: d.year, actual: null as number | null,
-      proj: d.proj, lo: d.lo, hi: d.hi,
-    })),
-  ];
+  const allYears = [
+    ...ACTUAL_YEARS.map(String),
+    ...projData.map(d => d.year),
+  ].filter((y, i, arr) => arr.indexOf(y) === i);
+
+  const actualMap = Object.fromEntries(actuals.map(d => [d.year, d.actual]));
+
+  const combined = allYears.map(year => {
+    const isProj = Number(year) > BASE_YEAR;
+    const isBase = year === String(BASE_YEAR);
+    const actual = actualMap[year] ?? null;
+    const proj   = isProj ? (projData.find(d => d.year === year)?.proj ?? null) : isBase ? actual : null;
+    const lo     = isProj ? (projData.find(d => d.year === year)?.lo   ?? null) : isBase ? actual : null;
+    const hi     = isProj ? (projData.find(d => d.year === year)?.hi   ?? null) : isBase ? actual : null;
+    return { year, actual, proj, lo, hi };
+  });
 
   const allVals = [
     ...actuals.map(d => d.actual),
     ...projData.map(d => d.hi),
-  ].filter(v => v > 0);
+  ].filter(v => v != null && v > 0) as number[];
   const maxVal = Math.floor(allVals.length > 0 ? Math.max(...allVals) * 1.2 : 60);
+
+  const projColor = model === "carmelo" ? "#a855f7" : "#8884d8";
 
   return (
     <div className={styles.chartWrap}>
       <div className={styles.chartHeader}>
         <span className={`${styles.chartTitle} cond`}>Fantasy Pts Projection</span>
-        <span className={styles.chartCategory}>{category(player.proj_y1 ?? 0)}</span>
         <div className={styles.chartLegend}>
           <span className={styles.legendActual}>— Actual</span>
-          <span className={styles.legendProj}>- - Proj</span>
+          <span className={styles.legendProj} style={{ color: projColor }}>
+            - - {model === "carmelo" ? "CARMELO" : "SPS"}
+          </span>
           <span className={styles.legendCI}>CI</span>
         </div>
       </div>
@@ -91,8 +128,8 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
         <AreaChart data={combined} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
           <defs>
             <linearGradient id="ciGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="var(--proj)" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="var(--proj)" stopOpacity={0.03} />
+              <stop offset="5%"  stopColor={projColor} stopOpacity={0.25} />
+              <stop offset="95%" stopColor={projColor} stopOpacity={0.03} />
             </linearGradient>
           </defs>
           <XAxis
@@ -115,17 +152,18 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
             formatter={(val: number) => val?.toFixed(1) ?? "—"}
           />
           <ReferenceLine x={String(BASE_YEAR)} stroke="var(--border2)" strokeDasharray="3 3" />
-          <Area type="monotone" dataKey="hi" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
-          <Area type="monotone" dataKey="lo" stroke="none" fill="url(#ciGrad)" isAnimationActive={false} />
+          <Area type="monotone" dataKey="hi" stroke="none" fill="url(#ciGrad)" connectNulls isAnimationActive={false} />
+          <Area type="monotone" dataKey="lo" stroke="none" fill="url(#ciGrad)" connectNulls isAnimationActive={false} />
           <Area
             type="monotone" dataKey="actual"
             stroke="#2563eb" strokeWidth={3} fill="transparent"
-            name="Actual" activeDot={{ r: 6 }}
+            name="Actual" activeDot={{ r: 6 }} connectNulls
           />
           <Area
             type="monotone" dataKey="proj"
-            stroke="#8884d8" strokeWidth={3} strokeDasharray="5 5"
-            fill="transparent" name="Projected"
+            stroke={projColor} strokeWidth={3} strokeDasharray="5 5"
+            fill="transparent" name={model === "carmelo" ? "CARMELO" : "SPS"}
+            connectNulls
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -136,10 +174,8 @@ function ProjectionChart({ player }: { player: PlayerCard }) {
 // ── CompSparkline ─────────────────────────────────────────────────────────────
 
 function CompSparkline({ trajectory }: { trajectory: (number | null)[] }) {
-  // trajectory = [ym3, ym2, ym1, y0, y1, y2, y3]
   const labels = ["−3", "−2", "−1", "0", "+1", "+2", "+3"];
   const data = trajectory.map((v, i) => ({ x: labels[i], v }));
-
   const vals = trajectory.filter((v): v is number => v !== null && v > 0);
   const maxV = vals.length > 0 ? Math.max(...vals) : 30;
 
@@ -150,8 +186,7 @@ function CompSparkline({ trajectory }: { trajectory: (number | null)[] }) {
         <Line
           type="monotone" dataKey="v"
           stroke="var(--proj)" strokeWidth={1.5}
-          dot={false} connectNulls
-          isAnimationActive={false}
+          dot={false} connectNulls isAnimationActive={false}
         />
         <YAxis domain={[0, Math.ceil(maxV * 1.15)]} hide />
         <XAxis dataKey="x" hide />
@@ -177,8 +212,8 @@ export type PlayerComp = {
   player_id: string;
   comp_year: number;
   comp_age: number;
-  similarity: number;           // 0–100
-  trajectory: (number | null)[]; // 7 values: ym3 ym2 ym1 y0 y1 y2 y3
+  similarity: number;
+  trajectory: (number | null)[];
 };
 
 function simColor(score: number): string {
@@ -189,7 +224,6 @@ function simColor(score: number): string {
 
 function CompsSection({ comps }: { comps: PlayerComp[] }) {
   if (!comps || comps.length === 0) return null;
-
   return (
     <section className={styles.section}>
       <h3 className={`${styles.sectionTitle} cond`}>10 Most Comparable Players</h3>
@@ -219,15 +253,69 @@ function CompsSection({ comps }: { comps: PlayerComp[] }) {
   );
 }
 
+// ── FiveYearTable ─────────────────────────────────────────────────────────────
+
+function FiveYearTable({ player, model }: { player: PlayerCard; model: ProjectionModel }) {
+  const baseYear = 2026;
+
+  const rows = [1, 2, 3, 4, 5].map(i => ({
+    season: `${baseYear + i - 1}–${String(baseYear + i).slice(2)}`,
+    age:    player.age + (baseYear - (player.season ?? 2026)) + i,
+    proj:   getProj(player, model, i),
+    lo:     player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
+    hi:     player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
+  }));
+
+  const maxVal = Math.max(...rows.map(r => r.proj), 1);
+  const projColor = model === "carmelo" ? "#a855f7" : "var(--proj)";
+
+  return (
+    <table className={styles.fiveYearTable}>
+      <thead>
+        <tr><th>Season</th><th>Age</th><th>Proj</th><th>Range</th><th></th></tr>
+      </thead>
+      <tbody>
+        {rows.map(r => (
+          <tr key={r.season}>
+            <td className="mono">{r.season}</td>
+            <td className="mono">{r.age}</td>
+            <td className="mono" style={{ color: projColor, fontWeight: 500 }}>
+              {r.proj > 0 ? r.proj.toFixed(1) : "—"}
+            </td>
+            <td className="mono" style={{ color: "var(--text3)", fontSize: "0.72rem" }}>
+              {r.lo > 0 ? `${r.lo.toFixed(0)}–${r.hi.toFixed(0)}` : "—"}
+            </td>
+            <td>
+              <div className={styles.miniBar}>
+                <div
+                  className={styles.miniBarFill}
+                  style={{
+                    width: `${(r.proj / (maxVal * 1.1)) * 100}%`,
+                    background: projColor,
+                  }}
+                />
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PlayerCardView({ player, comps }: {
   player: PlayerCard;
   comps?: PlayerComp[];
 }) {
-  const pg    = perGame(player);
-  const fpts  = currentFantasyPts(player);
-  const ts    = trueShooting(player);
+  const [model, setModel] = useState<ProjectionModel>("sps");
+
+  const hasCarmelo = player.carmelo_y1 != null;
+
+  const pg     = perGame(player);
+  const fpts   = currentFantasyPts(player);
+  const ts     = trueShooting(player);
   const ftPct_ = ftPct(player);
   const pts_pg = pg.pts;
 
@@ -253,6 +341,22 @@ export default function PlayerCardView({ player, comps }: {
             <span className={`${styles.bigStatVal} mono`}>{fpts.toFixed(1)}</span>
             <span className={styles.bigStatLabel}>fpts / game</span>
           </div>
+          {hasCarmelo && (
+            <div className={styles.modelToggle}>
+              <button
+                className={`${styles.modelBtn} ${model === "sps" ? styles.modelBtnActive : ""}`}
+                onClick={() => setModel("sps")}
+              >
+                SPS
+              </button>
+              <button
+                className={`${styles.modelBtn} ${model === "carmelo" ? styles.modelBtnActive : ""}`}
+                onClick={() => setModel("carmelo")}
+              >
+                CARMELO
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -261,7 +365,6 @@ export default function PlayerCardView({ player, comps }: {
 
         {/* ── Left col ─────────────────────────────────── */}
         <div className={styles.leftCol}>
-
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Vitals</h3>
             <div className={styles.vitalGrid}>
@@ -272,15 +375,15 @@ export default function PlayerCardView({ player, comps }: {
 
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Scoring</h3>
-            <StatBar label="True Shoot %" value={fmtPct(ts)}           rank={player.ts_pct_rank ?? 50} />
-            <StatBar label="Free Throw %" value={fmtPct(ftPct_)}       rank={player.ft_pct_rank ?? 50} />
+            <StatBar label="True Shoot %" value={fmtPct(ts)}             rank={player.ts_pct_rank ?? 50} />
+            <StatBar label="Free Throw %" value={fmtPct(ftPct_)}         rank={player.ft_pct_rank ?? 50} />
             <StatBar label="Usage %"      value={fmtPct(player.usg_pct)} rank={player.usg_pct_rank ?? 50} />
           </section>
 
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Tendencies</h3>
-            <StatBar label="3PT Freq" value={fmtPct(player.x3_freq)}  rank={player.x3_freq_rank ?? 50} />
-            <StatBar label="FT Freq"  value={fmtPct(player.ft_freq)}  rank={player.ft_freq_rank ?? 50} />
+            <StatBar label="3PT Freq" value={fmtPct(player.x3_freq)} rank={player.x3_freq_rank ?? 50} />
+            <StatBar label="FT Freq"  value={fmtPct(player.ft_freq)} rank={player.ft_freq_rank ?? 50} />
           </section>
 
           <section className={styles.section}>
@@ -300,7 +403,7 @@ export default function PlayerCardView({ player, comps }: {
         {/* ── Right col ────────────────────────────────── */}
         <div className={styles.rightCol}>
 
-          <ProjectionChart player={player} />
+          <ProjectionChart player={player} model={model} />
 
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>This Season · Per Game</h3>
@@ -317,13 +420,16 @@ export default function PlayerCardView({ player, comps }: {
           </section>
 
           <section className={styles.section}>
-            <h3 className={`${styles.sectionTitle} cond`}>5-Year Projection · Fpts/G</h3>
-            <FiveYearTable player={player} baseYear={player.season ?? 2026} />
+            <h3 className={`${styles.sectionTitle} cond`}>
+              5-Year Projection · Fpts/G
+              {model === "carmelo" && (
+                <span className={styles.modelBadge}>CARMELO</span>
+              )}
+            </h3>
+            <FiveYearTable player={player} model={model} />
           </section>
 
-          {/* ── Comps ──────────────────────────────────── */}
           {comps && <CompsSection comps={comps} />}
-
         </div>
       </div>
     </div>
@@ -349,44 +455,5 @@ function ProjStat({ label, value, neg }: { label: string; value: string; neg?: b
       </span>
       <span className={styles.projStatLabel}>{label}</span>
     </div>
-  );
-}
-
-function FiveYearTable({ player, baseYear }: { player: PlayerCard; baseYear: number }) {
-  const rows = [1, 2, 3, 4, 5].map(i => ({
-    season: `${baseYear + i - 1}–${String(baseYear + i).slice(2)}`,
-    age:  player.age + i,
-    proj: player[`proj_y${i}` as keyof PlayerCard] as number ?? 0,
-    lo:   player[`ci_lo_y${i}` as keyof PlayerCard] as number ?? 0,
-    hi:   player[`ci_hi_y${i}` as keyof PlayerCard] as number ?? 0,
-  }));
-
-  const maxVal = Math.max(...rows.map(r => r.proj), 1);
-
-  return (
-    <table className={styles.fiveYearTable}>
-      <thead>
-        <tr><th>Season</th><th>Age</th><th>Proj</th><th>Range</th><th></th></tr>
-      </thead>
-      <tbody>
-        {rows.map(r => (
-          <tr key={r.season}>
-            <td className="mono">{r.season}</td>
-            <td className="mono">{r.age}</td>
-            <td className="mono" style={{ color: "var(--proj)", fontWeight: 500 }}>
-              {r.proj > 0 ? r.proj.toFixed(1) : "—"}
-            </td>
-            <td className="mono" style={{ color: "var(--text3)", fontSize: "0.72rem" }}>
-              {r.lo > 0 ? `${r.lo.toFixed(0)}–${r.hi.toFixed(0)}` : "—"}
-            </td>
-            <td>
-              <div className={styles.miniBar}>
-                <div className={styles.miniBarFill} style={{ width: `${(r.proj / (maxVal * 1.1)) * 100}%` }} />
-              </div>
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
   );
 }

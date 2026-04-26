@@ -15,7 +15,7 @@ import simData from "@/data/similarities.json";
 let RAW_PLAYERS: PlayerCard[];
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const raw = require("@/data/players.json") as PlayerCard[];
+  const raw = require("@/data/player_cards.json") as PlayerCard[];
   RAW_PLAYERS = raw.length > 0 ? raw : MOCK_PLAYERS;
 } catch {
   RAW_PLAYERS = MOCK_PLAYERS;

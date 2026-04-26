@@ -487,22 +487,53 @@ def add_percentiles(
 # Main
 # ---------------------------------------------------------------------------
 
+def _get_master_player_list(base_year: int) -> pd.DataFrame:
+    """Collects unique player IDs and names from the last 3 seasons."""
+    frames = []
+    # Check current year + last 2 years
+    for y in [base_year, base_year - 1, base_year - 2]:
+        path = RAW_DIR / f"player_totals_{y}.csv"
+        if path.exists():
+            df = pd.read_csv(path, usecols=["player_id", "player"])
+            frames.append(df)
+    
+    if not frames:
+        return pd.DataFrame(columns=["player_id", "player"])
+    
+    # Combine and keep the most recent name/entry for each ID
+    master = pd.concat(frames, ignore_index=True)
+    master["player_id"] = master["player_id"].astype(str)
+    return master.drop_duplicates(subset="player_id", keep="first")
+
 def build(base_year: int = 2026) -> pd.DataFrame:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
-    # ── 1. SPS projections ────────────────────────────────────────────────
+    # ── 1. Create the Master List (2024, 2025, 2026) ─────────────────────
+    # This ensures players from previous years are not excluded.
+    base = _get_master_player_list(base_year)
+    log.info("Master player list built: %d players identified from 3-year window.", len(base))
+
+    # ── 2. Load Projections and Current Totals ──────────────────────────
     proj = load_2025_projections(base_year)
     raw  = load_raw_totals(base_year)
 
-    if proj.empty and raw.empty:
-        raise RuntimeError(
-            f"No projection data or raw totals for {base_year}. "
-            "Run fetch.py and pipeline.py first."
-        )
+    # Merge current stats onto our master list
+    if not proj.empty:
+        proj["player_id"] = proj["player_id"].astype(str)
+        # We use outer here just in case projections has a rookie not in totals yet
+        base = base.merge(proj, on="player_id", how="outer", suffixes=("", "_proj"))
+    
+    if not raw.empty:
+        raw["player_id"] = raw["player_id"].astype(str)
+        # Merge raw totals for the base year (2026)
+        base = base.merge(raw, on="player_id", how="left", suffixes=("", "_raw"))
 
-    base = proj if not proj.empty else raw.copy()
-    base["player_id"] = base["player_id"].astype(str)
+    # If 'player' column ended up duplicated or missing from merge, clean it up
+    if "player_proj" in base.columns:
+        base["player"] = base["player"].fillna(base["player_proj"])
+        base.drop(columns=["player_proj"], inplace=True)
 
+    # Re-calculate projected PG stats if missing
     for stat in PROJ_STATS:
         pg_col    = f"proj_{stat}_pg"
         per36_col = f"proj_{stat}"
@@ -510,7 +541,7 @@ def build(base_year: int = 2026) -> pd.DataFrame:
         if pg_col not in base.columns and per36_col in base.columns and mpg_col in base.columns:
             base[pg_col] = base[per36_col] / 36 * base[mpg_col]
 
-    # ── 2. Bio data ───────────────────────────────────────────────────────
+    # ── 3. Bio data ───────────────────────────────────────────────────────
     bio = load_bio(base_year)
     if not bio.empty:
         bio["player_id"] = bio["player_id"].astype(str)
@@ -519,7 +550,7 @@ def build(base_year: int = 2026) -> pd.DataFrame:
         for c in ["ht_inches", "wt", "draft_pick"]:
             base[c] = np.nan
 
-    # ── 3. Advanced stats ─────────────────────────────────────────────────
+    # ── 4. Advanced stats (Base Year) ─────────────────────────────────────
     adv = load_advanced(base_year)
     if not adv.empty:
         adv["player_id"] = adv["player_id"].astype(str)
@@ -529,23 +560,25 @@ def build(base_year: int = 2026) -> pd.DataFrame:
                              "ft_pct", "bpm", "dbpm", "vorp", "per", "ws_per48"]]
         base = base.merge(adv[adv_cols], on="player_id", how="left")
 
-    for col in ["ts_pct", "usg_pct", "ast_pct", "tov_pct",
-                "trb_pct", "blk_pct", "stl_pct", "ft_pct"]:
-        if col not in base.columns:
-            base[col] = np.nan
-
-    # ── 4. Shooting tendency columns ──────────────────────────────────────
+    # ── 5. Shooting tendency / Historical Arc / Projected Arc ──────────────
+    # These functions already handle their own year-logic, so we just pass our expanded 'base'
     base = add_tendency_cols(base, base_year)
-
-    # ── 5. Historical actuals arc ─────────────────────────────────────────
+    
     arc_actual = build_actuals_arc(base["player_id"], base_year)
     arc_actual["player_id"] = arc_actual["player_id"].astype(str)
     base = base.merge(arc_actual, on="player_id", how="left")
 
-    # ── 6. SPS projected arc (y1–y5) ─────────────────────────────────────
     arc_proj = build_projection_arc(base["player_id"], base_year)
     arc_proj["player_id"] = arc_proj["player_id"].astype(str)
     base = base.merge(arc_proj, on="player_id", how="left")
+
+    # ── 6. Percentiles & Schema ──────────────────────────────────────────
+    hist_ref = None
+    hist_path = PROCESSED_DIR / "historical_sps_projections.csv"
+    if hist_path.exists():
+        hist_ref = pd.read_csv(hist_path, usecols=lambda c: not c.startswith("proj"))
+
+    base = add_percentiles(base, hist_ref)
 
     # ── 7. Percentiles ────────────────────────────────────────────────────
     hist_ref = None
@@ -595,8 +628,8 @@ def build(base_year: int = 2026) -> pd.DataFrame:
     if "fantasy_pts" in final.columns and "player" in final.columns:
         top5 = final.nlargest(5, "fantasy_pts")[["player", "age", "proj_mpg", "fantasy_pts"]]
         log.info("Top 5 by fantasy_pts:\n%s", top5.to_string(index=False))
-
-    return final
+    
+    return final # (Assuming you keep the rest of your original schema logic)
 
 
 # ---------------------------------------------------------------------------

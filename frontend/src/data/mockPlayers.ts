@@ -84,6 +84,13 @@ export interface PlayerCard {
   proj_y4: number;
   proj_y5: number;
 
+  carmelo_y1: number | null;
+  carmelo_y2: number | null;
+  carmelo_y3: number | null;
+  carmelo_y4: number | null;
+  carmelo_y5: number | null;
+  
+
   // ── Confidence intervals ──────────────────────────────────────────────────
   ci_lo_y1: number; ci_hi_y1: number;
   ci_lo_y2: number; ci_hi_y2: number;
@@ -97,6 +104,22 @@ export interface PlayerCard {
 // Replace by running: python src/data/build_player_cards.py
 // which writes frontend/src/data/players.json
 // ─────────────────────────────────────────────────────────────────────────────
+
+export type ProjectionModel = "sps" | "carmelo";
+
+export function getProjections(player: PlayerCard, model: ProjectionModel): (number | null)[] {
+  if (model === "carmelo") {
+    return [
+      player.carmelo_y1,
+      player.carmelo_y2,
+      player.carmelo_y3,
+      player.carmelo_y4,
+      player.carmelo_y5,
+    ];
+  }
+  return [player.proj_y1, player.proj_y2, player.proj_y3, player.proj_y4, player.proj_y5];
+}
+
 
 export const MOCK_PLAYERS: PlayerCard[] = [
   {
@@ -120,7 +143,7 @@ export const MOCK_PLAYERS: PlayerCard[] = [
     proj_y1: 49.64, proj_y2: 48.92, proj_y3: 48.03, proj_y4: 46.63, proj_y5: 44.74,
     ci_lo_y1: 39.71, ci_hi_y1: 59.56, ci_lo_y2: 39.13, ci_hi_y2: 58.70,
     ci_lo_y3: 38.43, ci_hi_y3: 57.64, ci_lo_y4: 37.30, ci_hi_y4: 55.96,
-    ci_lo_y5: 35.80, ci_hi_y5: 53.69,
+    ci_lo_y5: 35.80, ci_hi_y5: 53.69, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null 
   },
   {
     player_id: "edwaran01", player: "Anthony Edwards", age: 23,
@@ -143,6 +166,6 @@ export const MOCK_PLAYERS: PlayerCard[] = [
     proj_y1: 42.19, proj_y2: 42.45, proj_y3: 42.51, proj_y4: 42.39, proj_y5: 42.09,
     ci_lo_y1: 33.76, ci_hi_y1: 50.63, ci_lo_y2: 33.96, ci_hi_y2: 50.94,
     ci_lo_y3: 34.01, ci_hi_y3: 51.01, ci_lo_y4: 33.91, ci_hi_y4: 50.86,
-    ci_lo_y5: 33.67, ci_hi_y5: 50.51,
+    ci_lo_y5: 33.67, ci_hi_y5: 50.51, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null 
   },
 ];

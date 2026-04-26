@@ -374,3 +374,34 @@
   white-space: nowrap;
   padding-top: 1px;
 }
+
+.modelToggle {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.modelBtn {
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-family: "DM Mono", monospace;
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text3);
+  cursor: pointer;
+  letter-spacing: 0.05em;
+}
+
+.modelBtnActive {
+  background: var(--border2);
+  color: var(--text);
+}
+
+.modelBadge {
+  margin-left: 8px;
+  font-size: 0.65rem;
+  font-family: "DM Mono", monospace;
+  color: #a855f7;
+  letter-spacing: 0.08em;
+}
