@@ -53,7 +53,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-from typing import Optional
+
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 log = logging.getLogger(__name__)
 
@@ -276,7 +276,7 @@ FEAT_COLS = list(FEATURE_WEIGHTS.keys())
 VEC_COLS  = [f"f_{c}" for c in FEAT_COLS]
 
 
-def _fpts_row(row) -> Optional[float]:
+def _fpts_row(row) -> float | None:
     total = 0.0
     for stat, w in FANTASY_WEIGHTS.items():
         v = row.get(stat, 0.0)
@@ -286,13 +286,17 @@ def _fpts_row(row) -> Optional[float]:
     return round(total, 2)
 
 
-def build_historical_vectors(feat_df: pd.DataFrame, last_season: int) -> pd.DataFrame:
+def build_historical_vectors(feat_df: pd.DataFrame, last_season: int, feat_df_full: pd.DataFrame = None) -> pd.DataFrame:
+    # Snapshot anchors only up to last_season (prevents current players as their own comps)
     df = feat_df[feat_df["season"] <= last_season].drop_duplicates(["player_id", "season"]).copy()
     df["fpts_pg"] = df.apply(_fpts_row, axis=1)
 
-    # Build fpts lookup for trajectory
-    fpts_lookup: dict[str, dict[int, float | None]] = {}
-    for _, row in df[["player_id", "season", "fpts_pg"]].iterrows():
+    # Trajectory lookup uses full dataset so sparklines extend through present
+    traj_source = (feat_df_full if feat_df_full is not None else feat_df).drop_duplicates(["player_id", "season"]).copy()
+    traj_source["fpts_pg"] = traj_source.apply(_fpts_row, axis=1)
+
+    fpts_lookup: dict[str, dict] = {}
+    for _, row in traj_source[["player_id", "season", "fpts_pg"]].iterrows():
         fpts_lookup.setdefault(str(row["player_id"]), {})[int(row["season"])] = row["fpts_pg"]
 
     rows = []
@@ -377,18 +381,39 @@ def find_top10_comps(
     if not feat_cols:
         return []
 
-    hist_matrix = candidates[feat_cols].to_numpy(dtype=float)
-    curr_vector = np.array([float(current_row.get(c, 0.0)) for c in feat_cols]).reshape(1, -1)
+    # Rebuild raw (pre-weighted) values from f_ cols by dividing out weights
+    hist_raw_matrix = np.array([
+        [float(candidates.iloc[i][fc]) / FEATURE_WEIGHTS[fc[2:]]
+         if FEATURE_WEIGHTS.get(fc[2:], 0) != 0 else 0.0
+         for fc in feat_cols]
+        for i in range(len(candidates))
+    ])
+    curr_raw_vector = np.array([
+        float(current_row.get(fc, 0.0)) / FEATURE_WEIGHTS[fc[2:]]
+        if FEATURE_WEIGHTS.get(fc[2:], 0) != 0 else 0.0
+        for fc in feat_cols
+    ]).reshape(1, -1)
 
+    # 1. Z-score on raw values across candidate pool + current player
     scaler = StandardScaler()
-    all_scaled = scaler.fit_transform(np.vstack([hist_matrix, curr_vector]))
+    all_raw = np.vstack([hist_raw_matrix, curr_raw_vector])
+    all_scaled = scaler.fit_transform(all_raw)
     hist_scaled = all_scaled[:-1]
     curr_scaled = all_scaled[-1:]
 
-    dists = np.sqrt(np.sum((hist_scaled - curr_scaled) ** 2, axis=1))
+    # 2. Apply weights after z-scoring
+    weight_arr = np.array([FEATURE_WEIGHTS.get(fc[2:], 1.0) for fc in feat_cols])
+    hist_weighted = hist_scaled * weight_arr
+    curr_weighted = curr_scaled * weight_arr
+
+    dists = np.sqrt(np.sum((hist_weighted - curr_weighted) ** 2, axis=1))
     candidates["_dist"] = dists
-    max_d = dists.max() if dists.max() > 0 else 1.0
-    candidates["_sim"] = (1 - dists / max_d) * 100
+
+    # Absolute similarity scale: 100 * exp(-dist / k)
+    # k is the median distance in the pool — so a typical comp scores ~61,
+    # a great comp scores 80+, a bad one scores well below 50.
+    k = np.median(dists) if np.median(dists) > 0 else 1.0
+    candidates["_sim"] = 100 * np.exp(-dists / k)
 
     best = (
         candidates
@@ -446,7 +471,7 @@ def main():
     feat_df = build_feature_matrix(totals, advanced, bio, draft)
 
     log.info("Building vectors...")
-    hist_vecs = build_historical_vectors(feat_df, last_season=args.base_year - 4)
+    hist_vecs = build_historical_vectors(feat_df, last_season=args.base_year - 4, feat_df_full=feat_df)
     curr_vecs = build_current_vectors(feat_df, base_year=args.base_year)
 
     log.info("Computing similarities for %d players...", len(curr_vecs))

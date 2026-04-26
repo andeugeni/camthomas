@@ -34,7 +34,7 @@ import pandas as pd
 ROOT          = Path(__file__).resolve().parents[2]
 RAW_DIR       = ROOT / "data" / "raw"
 PROCESSED_DIR = ROOT / "data" / "processed"
-OUT_PATH      = PROCESSED_DIR / "player_cards_2025.csv"
+OUT_PATH      = PROCESSED_DIR / "player_cards_2026.csv"
 
 # ---------------------------------------------------------------------------
 # Fantasy scoring (DraftKings default — must match projections.py)
@@ -240,6 +240,7 @@ def build_actuals_arc(
     Missing seasons = NaN.
     """
     years = list(range(base_year - n_back, base_year + 1))
+    print("YEARS: ", years)
 
     path = PROCESSED_DIR / "historical_actuals.csv"
     stat_cols_y0 = [f"{s}_y0" for s in PROJ_STATS]
@@ -296,6 +297,7 @@ def build_actuals_arc(
     log.warning("historical_actuals.csv missing or incomplete — loading raw totals per year.")
     all_frames = {}
     for y in years:
+        print(y)
         raw = _safe_read(RAW_DIR / f"player_totals_{y}.csv")
         if raw.empty or "player_id" not in raw.columns:
             continue
@@ -346,7 +348,7 @@ def build_projection_arc(
         proj_tov_y{i}   — turnovers per game
         ci_lo_y{i}, ci_hi_y{i}  — ±20% CI on fpts
     """
-    path = PROCESSED_DIR / "historical_sps_projections.csv"
+    path = PROCESSED_DIR / "projections_2026.csv"
 
     all_cols = []
     for i in range(1, n_future + 1):
@@ -355,7 +357,7 @@ def build_projection_arc(
         all_cols += [f"ci_lo_y{i}", f"ci_hi_y{i}"]
 
     if not path.exists():
-        log.warning("historical_sps_projections.csv not found — arc will be stub.")
+        log.warning("projections_2026.csv not found — arc will be stub.")
         df_empty = pd.DataFrame({"player_id": current_player_ids})
         for c in all_cols:
             df_empty[c] = np.nan
@@ -366,8 +368,7 @@ def build_projection_arc(
     subset = pd.DataFrame()
     for snap_yr in [base_year, base_year - 1]:
         subset = proj_hist[
-            (proj_hist["player_id"].isin(current_player_ids)) &
-            (proj_hist["snapshot_year"] == snap_yr)
+            (proj_hist["player_id"].isin(current_player_ids))
         ]
         if not subset.empty:
             log.info("Using snapshot_year=%d for projection arc.", snap_yr)
@@ -383,32 +384,31 @@ def build_projection_arc(
     result = subset[["player_id"]].copy().reset_index(drop=True)
 
     for i in range(1, n_future + 1):
-        mpg_col = f"mpg_y{i}"
+        # projections.py saves per-game columns as {stat}_pg_y{i} and proj_mpg_y{i}
+        mpg_col = f"proj_mpg_y{i}"
         mpg = subset[mpg_col].fillna(0) if mpg_col in subset.columns else pd.Series(0.0, index=subset.index)
 
-        # Fantasy pts per game
+        # Fantasy pts — columns are already per-game
         fpts = pd.Series(0.0, index=subset.index)
         for stat, w in DK_WEIGHTS.items():
-            col = f"{stat}_y{i}"
+            col = f"{stat}_pg_y{i}"
             if col in subset.columns:
-                # stat columns are per-36; convert to per-game via mpg
-                fpts += subset[col].fillna(0) / 36 * mpg * w
+                fpts += subset[col].fillna(0) * w
         result[f"proj_fpts_y{i}"] = fpts.values
         result[f"ci_lo_y{i}"]     = (fpts * 0.80).values
         result[f"ci_hi_y{i}"]     = (fpts * 1.20).values
 
-        # Points per game: (x2p*2 + x3p*3 + ft) per 36, scaled to mpg
-        x2p = subset.get(f"x2p_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
-        x3p = subset.get(f"x3p_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
-        ft  = subset.get(f"ft_y{i}",  pd.Series(0.0, index=subset.index)).fillna(0)
-        pts_per36 = _pts_from_components(x2p, x3p, ft)
-        result[f"proj_pts_y{i}"] = (pts_per36 / 36 * mpg).values
+        # Points per game from per-game components
+        x2p = subset.get(f"x2p_pg_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
+        x3p = subset.get(f"x3p_pg_y{i}", pd.Series(0.0, index=subset.index)).fillna(0)
+        ft  = subset.get(f"ft_pg_y{i}",  pd.Series(0.0, index=subset.index)).fillna(0)
+        result[f"proj_pts_y{i}"] = _pts_from_components(x2p, x3p, ft).values
 
-        # Other per-game stats
+        # Other per-game stats — already per-game, no conversion needed
         for stat in ["trb", "ast", "stl", "blk", "tov"]:
-            col = f"{stat}_y{i}"
+            col = f"{stat}_pg_y{i}"
             if col in subset.columns:
-                result[f"proj_{stat}_y{i}"] = (subset[col].fillna(0) / 36 * mpg).values
+                result[f"proj_{stat}_y{i}"] = subset[col].fillna(0).values
             else:
                 result[f"proj_{stat}_y{i}"] = np.nan
 
@@ -487,7 +487,7 @@ def add_percentiles(
 # Main
 # ---------------------------------------------------------------------------
 
-def build(base_year: int = 2025) -> pd.DataFrame:
+def build(base_year: int = 2026) -> pd.DataFrame:
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 
     # ── 1. SPS projections ────────────────────────────────────────────────
@@ -605,7 +605,7 @@ def build(base_year: int = 2025) -> pd.DataFrame:
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Build player_cards_{year}.csv")
-    parser.add_argument("--base-year", type=int, default=2025,
-                        help="Most recent completed season (default: 2025)")
+    parser.add_argument("--base-year", type=int, default=2026,
+                        help="Most recent completed season (default: 2026)")
     args = parser.parse_args()
     build(args.base_year)

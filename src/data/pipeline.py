@@ -401,7 +401,7 @@ def build_snapshot_row(
 
 def build_historical_tables(
     start_year: int = 1980,
-    end_year:   int = 2024,
+    end_year:   int = 2026,
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """
     Iterate over every player-season from start_year to end_year and build
@@ -476,7 +476,7 @@ def save_tables(proj_df: pd.DataFrame, actual_df: pd.DataFrame) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build historical SPS projection and actuals tables")
     parser.add_argument("--start-year", type=int, default=1980)
-    parser.add_argument("--end-year",   type=int, default=2024)
+    parser.add_argument("--end-year",   type=int, default=2026)
     args = parser.parse_args()
 
     proj_df, actual_df = build_historical_tables(args.start_year, args.end_year)

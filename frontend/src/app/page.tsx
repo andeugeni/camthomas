@@ -104,7 +104,7 @@ export default function Home() {
           <span className={styles.footerNote}>
             {IS_MOCK
               ? "⚠ Mock data · run build_player_cards.py"
-              : `${PLAYERS.length} players · player_cards_2025.csv`}
+              : `${PLAYERS.length} players · player_cards_2026.csv`}
           </span>
           <span className={styles.footerNote} style={{ marginTop: 2 }}>
             Data: Basketball Reference · SPS + CARMELO

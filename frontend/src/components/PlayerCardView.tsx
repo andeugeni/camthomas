@@ -32,10 +32,10 @@ function StatBar({ label, value, rank }: {
 // ── ProjectionChart ───────────────────────────────────────────────────────────
 
 function ProjectionChart({ player }: { player: PlayerCard }) {
-  const BASE_YEAR = player.season ?? 2025;
+  const BASE_YEAR = player.season ?? 2026;
   const fpts = currentFantasyPts(player);
 
-  const ACTUAL_YEARS = [2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025] as const;
+  const ACTUAL_YEARS = [2019, 2020, 2021, 2022, 2023, 2024, 2025, 2026] as const;
   const actuals = ACTUAL_YEARS.map(yr => {
     const raw = player[`actual_fpts_${yr}` as keyof PlayerCard] as number ?? 0;
     const val = normaliseActual(raw, player.g);
@@ -318,7 +318,7 @@ export default function PlayerCardView({ player, comps }: {
 
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>5-Year Projection · Fpts/G</h3>
-            <FiveYearTable player={player} baseYear={player.season ?? 2025} />
+            <FiveYearTable player={player} baseYear={player.season ?? 2026} />
           </section>
 
           {/* ── Comps ──────────────────────────────────── */}

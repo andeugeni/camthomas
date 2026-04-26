@@ -351,7 +351,7 @@ def _per36_to_per_game(wide: pd.DataFrame) -> pd.DataFrame:
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(base_year: int = 2025) -> pd.DataFrame:
+def run(base_year: int = 2026) -> pd.DataFrame:
     """
     Build the full projection table:
       - 3 years of per-game actuals  ({stat}_pg_{year}, fantasy_pts_{year})
@@ -406,9 +406,9 @@ SAVE_COLS_IDENTITY = ["player_id", "player", "age"]
 
 SAVE_COLS_ACTUALS = [
     f"{stat}_pg_{year}"
-    for year in [2025, 2024, 2023]
+    for year in [2026, 2025, 2024]
     for stat in STATS
-] + [f"fantasy_pts_{year}" for year in [2025, 2024, 2023]]
+] + [f"fantasy_pts_{year}" for year in [2026, 2025, 2024]]
 
 SAVE_COLS_PROJECTIONS = [
     col
@@ -447,7 +447,7 @@ if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 
-    base    = int(sys.argv[1]) if len(sys.argv) > 1 else 2025
+    base    = int(sys.argv[1]) if len(sys.argv) > 1 else 2026
     results = run(base)
     save(results, base)
 
