@@ -69,7 +69,8 @@ export default function AboutModal({ onClose }: { onClose: () => void }) {
           Take De&apos;Aaron Fox (sad light the beam) — a hyper-athletic guard nearing his probable peak. Two of his
           top-four comps are Kemba Walker and Grant Hill: players who fell off a cliff. The
           system predicts a player of his profile is likely to hit a wall, perhaps injury-related.
-          Knock on wood.
+          Knock on wood. Other players may have similar potential quirks tying them to players
+          of the past.
         </p>
 
         <h2 className={`${styles.step} cond`}>Does Cam Thomas Get a Good CAMTHOMAS Projection?</h2>

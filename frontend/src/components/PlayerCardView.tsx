@@ -14,10 +14,10 @@ import styles from "@/styles/PlayerCardView.module.css";
 
 // ── Model type ────────────────────────────────────────────────────────────────
 
-type ProjectionModel = "sps" | "carmelo";
+type ProjectionModel = "sps" | "camthomas";
 
 function getProj(player: PlayerCard, model: ProjectionModel, i: number): number {
-  if (model === "carmelo") {
+  if (model === "camthomas") {
     return (player[`carmelo_y${i}` as keyof PlayerCard] as number | null) ?? 0;
   }
   return (player[`proj_fpts_y${i}` as keyof PlayerCard] as number) ?? 0;
@@ -43,12 +43,12 @@ function ModelToggle({ model, onChange, player }: ModelToggleProps) {
         SPS
       </button>
       <button
-        className={`${styles.modelBtn} ${model === "carmelo" ? styles.modelBtnActive : ""}`}
-        onClick={() => onChange("carmelo")}
+        className={`${styles.modelBtn} ${model === "camthomas" ? styles.modelBtnActive : ""}`}
+        onClick={() => onChange("camthomas")}
         // 3. Now 'player' is defined and accessible here!
         disabled={!player?.carmelo_y1}
       >
-        CARMELO
+        CAMTHOMAS
       </button>
     </div>
   );
@@ -116,7 +116,7 @@ function ProjectionChart({ player, model }: { player: PlayerCard; model: Project
   ].filter(v => v != null && v > 0) as number[];
   const maxVal = Math.floor(allVals.length > 0 ? Math.max(...allVals) * 1.2 : 60);
 
-  const projColor = model === "carmelo" ? "#a855f7" : "#8884d8";
+  const projColor = model === "camthomas" ? "#a855f7" : "#8884d8";
 
   return (
     <div className={styles.chartWrap}>
@@ -125,7 +125,7 @@ function ProjectionChart({ player, model }: { player: PlayerCard; model: Project
         <div className={styles.chartLegend}>
           <span className={styles.legendActual}>— Actual</span>
           <span className={styles.legendProj} style={{ color: projColor }}>
-            - - {model === "carmelo" ? "CARMELO" : "SPS"}
+            - - {model === "camthomas" ? "CAMTHOMAS" : "SPS"}
           </span>
           <span className={styles.legendCI}>CI</span>
         </div>
@@ -168,7 +168,7 @@ function ProjectionChart({ player, model }: { player: PlayerCard; model: Project
           <Area
             type="monotone" dataKey="proj"
             stroke={projColor} strokeWidth={3} strokeDasharray="5 5"
-            fill="transparent" name={model === "carmelo" ? "CARMELO" : "SPS"}
+            fill="transparent" name={model === "camthomas" ? "CAMTHOMAS" : "SPS"}
             connectNulls
           />
         </AreaChart>
@@ -273,7 +273,7 @@ function FiveYearTable({ player, model }: { player: PlayerCard; model: Projectio
   }));
 
   const maxVal = Math.max(...rows.map(r => r.proj), 1);
-  const projColor = model === "carmelo" ? "#a855f7" : "var(--proj)";
+  const projColor = model === "camthomas" ? "#a855f7" : "var(--proj)";
 
   return (
     <table className={styles.fiveYearTable}>
@@ -356,10 +356,10 @@ export default function PlayerCardView({ player, comps }: {
                 SPS
               </button>
               <button
-                className={`${styles.modelBtn} ${model === "carmelo" ? styles.modelBtnActive : ""}`}
-                onClick={() => setModel("carmelo")}
+                className={`${styles.modelBtn} ${model === "camthomas" ? styles.modelBtnActive : ""}`}
+                onClick={() => setModel("camthomas")}
               >
-                CARMELO
+                CAMTHOMAS
               </button>
             </div>
           )}
@@ -428,8 +428,8 @@ export default function PlayerCardView({ player, comps }: {
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>
               5-Year Projection · Fpts/G
-              {model === "carmelo" && (
-                <span className={styles.modelBadge}>CARMELO</span>
+              {model === "camthomas" && (
+                <span className={styles.modelBadge}>CAMTHOMAS</span>
               )}
             </h3>
             <FiveYearTable player={player} model={model} />
