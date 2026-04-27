@@ -66,7 +66,9 @@ nba_api / Basketball Reference
 
 For each counting stat, CAMTHOMAS applies a weighted 3-year regression toward the league mean:
 
-$$\text{per36} = \frac{W_\text{player} + W_\text{league_avg_1000min}}{W_\text{minutes} + 1000} \times 36$$
+```
+per36 = ((W_player + W_league_avg_1000min) / (W_minutes + 1000)) * 36
+```
 
 where weights are **6 / 3 / 1** for the most recent three seasons respectively. Missing seasons are skipped and remaining weights renormalized.
 
