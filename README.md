@@ -203,7 +203,6 @@ The original Kaggle SPS notebook contained three bugs that are corrected through
 | Data processing | Python, pandas, NumPy, scikit-learn |
 | Local storage | CSV files in-project |
 | Frontend | Next.js, Vercel |
-| Scheduling | GitHub Actions (planned) |
 
 ---
 
