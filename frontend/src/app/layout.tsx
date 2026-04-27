@@ -5,6 +5,9 @@ import AboutButton from "@/components/AboutButton";
 export const metadata: Metadata = {
   title: "CAMTHOMAS · Career Arc Model",
   description: "Fantasy basketball projections powered by CAMTHOMAS",
+  icons: {
+    icon: "/favicon.ico",
+  }
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
