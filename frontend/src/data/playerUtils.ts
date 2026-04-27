@@ -8,8 +8,8 @@ import { PlayerCard } from "./mockPlayers";
 
 // DraftKings scoring
 const FW: Record<string, number> = {
-  x2p: 2.0, x3p: 3.0, ft: 1.0,
-  trb: 1.25, ast: 1.5, stl: 2.0, blk: 2.0, tov: -0.5,
+  x2p: 1.5, x3p: 2.25, ft: 0.75,
+  trb: 1.25, ast: 1.25, stl: 2.0, blk: 2.0, tov: -1,
 };
 
 
