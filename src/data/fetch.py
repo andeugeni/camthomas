@@ -441,8 +441,8 @@ def fetch_player_bio(
 # ---------------------------------------------------------------------------
 
 def fetch_draft_positions(
-    first_year: int = 1947,
-    last_year: int = CURRENT_SEASON - 1,
+    first_year: int = 1980,
+    last_year: int = 2026,
     retries: int = 3,
     backoff: float = 8.0,
     delay: float = 4.0,
