@@ -94,8 +94,8 @@ FEATURE_WEIGHTS: dict[str, float] = {
 }
 
 FANTASY_WEIGHTS = {
-    "x2p_pg": 2.0, "x3p_pg": 3.0, "ft_pg": 1.0,
-    "trb_pg": 1.25, "ast_pg": 1.5, "stl_pg": 2.0, "blk_pg": 2.0, "tov_pg": -0.5,
+    "x2p_pg": 1.5, "x3p_pg": 2.25, "ft_pg": 0.75,
+    "trb_pg": 1.25, "ast_pg": 1.5, "stl_pg": 2.0, "blk_pg": 2.0, "tov_pg": -1.0,
 }
 
 TRAJ_OFFSETS = [-3, -2, -1, 0, 1, 2, 3]

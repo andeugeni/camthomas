@@ -63,14 +63,14 @@ AGE_WINDOW             = 1      # comps within ±2 years of current player's age
 BASE_YEAR_DEFAULT      = 2026
 
 FANTASY_WEIGHTS: dict[str, float] = {
-    "x2p":  2.0,
-    "x3p":  3.0,
-    "ft":   1.0,
+    "x2p":  1.5,
+    "x3p":  2.25,
+    "ft":   0.75,
     "trb":  1.25,
     "ast":  1.5,
     "stl":  2.0,
     "blk":  2.0,
-    "tov": -0.5,
+    "tov": -1.0,
 }
 
 FEATURE_WEIGHTS: dict[str, float] = {

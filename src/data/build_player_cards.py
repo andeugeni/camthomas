@@ -41,14 +41,14 @@ OUT_PATH      = PROCESSED_DIR / "player_cards_2026.csv"
 # ---------------------------------------------------------------------------
 
 DK_WEIGHTS: dict[str, float] = {
-    "x2p":  2.0,
-    "x3p":  3.0,
-    "ft":   1.0,
+    "x2p":  1.5,
+    "x3p":  2.25,
+    "ft":   0.75,
     "trb":  1.25,
     "ast":  1.5,
     "stl":  2.0,
     "blk":  2.0,
-    "tov": -0.5,
+    "tov": -1.0,
 }
 
 PROJ_STATS = list(DK_WEIGHTS.keys())   # ["x2p","x3p","ft","trb","ast","stl","blk","tov"]

@@ -52,14 +52,14 @@ DEFAULT_WEIGHTS = (6, 3, 1)
 
 # DraftKings scoring
 FANTASY_WEIGHTS: dict[str, float] = {
-    "x2p":  2.0,
-    "x3p":  3.0,
-    "ft":   1.0,
+    "x2p":  1.5,
+    "x3p":  2.25,
+    "ft":   0.75,
     "trb":  1.25,
     "ast":  1.5,
     "stl":  2.0,
     "blk":  2.0,
-    "tov": -0.5,
+    "tov": -1.0,
 }
 
 MIN_MP       = 1
