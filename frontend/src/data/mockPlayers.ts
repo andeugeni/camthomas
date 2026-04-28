@@ -15,6 +15,8 @@ export interface PlayerCard {
   pos: string;
   tm: string;           // team abbreviation / full name from CSV
   season: number;
+  height_in: number | null;
+  weight_lbs: number | null;
 
   // ── Draft ─────────────────────────────────────────────────────────────────
   draft_pick: number | null;
@@ -123,6 +125,7 @@ export function getProjections(player: PlayerCard, model: ProjectionModel): (num
 
 export const MOCK_PLAYERS: PlayerCard[] = [
   {
+    height_in: 67, weight_lbs: 167,
     player_id: "gilgesh01", player: "Shai Gilgeous-Alexander", age: 26,
     pos: "POINT GUARD", tm: "OKLAHOMA CITY THUNDER", season: 2025,
     draft_pick: 11, draft_pct: 71,
@@ -146,6 +149,7 @@ export const MOCK_PLAYERS: PlayerCard[] = [
     ci_lo_y5: 35.80, ci_hi_y5: 53.69, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null 
   },
   {
+    height_in: 67, weight_lbs: 167,
     player_id: "edwaran01", player: "Anthony Edwards", age: 23,
     pos: "SHOOTING GUARD", tm: "MINNESOTA TIMBERWOLVES", season: 2025,
     draft_pick: 1, draft_pct: 100,

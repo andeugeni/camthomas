@@ -49,6 +49,7 @@ import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import StandardScaler
+from typing import Optional
 
 log = logging.getLogger(__name__)
 
@@ -422,7 +423,7 @@ def project_all(
 # Convenience runner
 # ---------------------------------------------------------------------------
 
-def run(base_year: int = 2025, player: str | None = None) -> pd.DataFrame:
+def run(player: Optional[str], base_year: int = 2025) -> pd.DataFrame:
     """
     End-to-end convenience wrapper.
 
@@ -471,5 +472,5 @@ if __name__ == "__main__":
     import sys
     base   = int(sys.argv[1])    if len(sys.argv) > 1 else 2025
     target = sys.argv[2]         if len(sys.argv) > 2 else None
-    results = run(base, target)
+    results = run(target, base)
     print(results.to_string(index=False))

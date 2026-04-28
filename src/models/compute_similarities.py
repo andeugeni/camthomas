@@ -49,6 +49,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -276,7 +277,7 @@ FEAT_COLS = list(FEATURE_WEIGHTS.keys())
 VEC_COLS  = [f"f_{c}" for c in FEAT_COLS]
 
 
-def _fpts_row(row) -> float | None:
+def _fpts_row(row) -> Optional[float]:
     total = 0.0
     for stat, w in FANTASY_WEIGHTS.items():
         v = row.get(stat, 0.0)

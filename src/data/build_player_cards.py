@@ -163,7 +163,7 @@ def load_bio(base_year: int) -> pd.DataFrame:
         return pd.DataFrame(columns=["player_id", "ht_inches", "wt", "draft_pick"])
 
     bio = bio.drop_duplicates(subset="player_id", keep="first")
-    keep = [c for c in ["player_id", "ht_inches", "wt", "draft_pick"] if c in bio.columns]
+    keep = [c for c in ["player_id", "height_in", "weight_lbs", "draft_pick"] if c in bio.columns]
     return bio[keep].copy()
 
 

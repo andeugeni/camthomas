@@ -374,6 +374,8 @@ export default function PlayerCardView({ player, comps }: {
           <section className={styles.section}>
             <h3 className={`${styles.sectionTitle} cond`}>Vitals</h3>
             <div className={styles.vitalGrid}>
+              <VitalRow label="Height"        value={`${Math.floor(player.height_in / 12)}'${player.height_in % 12}"`} />
+              <VitalRow label="Weight"        value={fmtNum(Math.floor(player.weight_lbs))} />
               <VitalRow label="MPG"        value={fmtNum(player.mpg)} />
               <VitalRow label="Draft pick" value={player.draft_pick != null ? `#${player.draft_pick}` : "Undrafted"} />
             </div>
