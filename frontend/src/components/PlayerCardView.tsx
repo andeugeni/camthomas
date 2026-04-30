@@ -309,6 +309,8 @@ function FiveYearTable({ player, model }: { player: PlayerCard; model: Projectio
   );
 }
 
+
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function PlayerCardView({ player, comps }: {
@@ -330,6 +332,12 @@ export default function PlayerCardView({ player, comps }: {
 
       {/* ── Header ───────────────────────────────────────── */}
       <div className={styles.header}>
+        <img
+          src={`https://cdn.nba.com/headshots/nba/latest/1040x760/${player.nba_person_id}.png`}
+          onError={(e) => (e.target as HTMLImageElement).src = '/fallback-silhouette.png'}          
+          alt={player.player}
+          height="100"
+        />
         <div className={styles.headerLeft}>
           <h1 className={`${styles.playerName} cond`}>{player.player}</h1>
           <div className={styles.headerMeta}>

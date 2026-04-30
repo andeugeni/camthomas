@@ -99,6 +99,8 @@ export interface PlayerCard {
   ci_lo_y3: number; ci_hi_y3: number;
   ci_lo_y4: number; ci_hi_y4: number;
   ci_lo_y5: number; ci_hi_y5: number;
+
+  nba_person_id: number | null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -146,7 +148,8 @@ export const MOCK_PLAYERS: PlayerCard[] = [
     proj_y1: 49.64, proj_y2: 48.92, proj_y3: 48.03, proj_y4: 46.63, proj_y5: 44.74,
     ci_lo_y1: 39.71, ci_hi_y1: 59.56, ci_lo_y2: 39.13, ci_hi_y2: 58.70,
     ci_lo_y3: 38.43, ci_hi_y3: 57.64, ci_lo_y4: 37.30, ci_hi_y4: 55.96,
-    ci_lo_y5: 35.80, ci_hi_y5: 53.69, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null 
+    ci_lo_y5: 35.80, ci_hi_y5: 53.69, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null,
+    nba_person_id: 1628983
   },
   {
     height_in: 67, weight_lbs: 167,
@@ -170,6 +173,7 @@ export const MOCK_PLAYERS: PlayerCard[] = [
     proj_y1: 42.19, proj_y2: 42.45, proj_y3: 42.51, proj_y4: 42.39, proj_y5: 42.09,
     ci_lo_y1: 33.76, ci_hi_y1: 50.63, ci_lo_y2: 33.96, ci_hi_y2: 50.94,
     ci_lo_y3: 34.01, ci_hi_y3: 51.01, ci_lo_y4: 33.91, ci_hi_y4: 50.86,
-    ci_lo_y5: 33.67, ci_hi_y5: 50.51, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null 
+    ci_lo_y5: 33.67, ci_hi_y5: 50.51, carmelo_y1: null, carmelo_y2: null, carmelo_y3: null, carmelo_y4: null, carmelo_y5: null, 
+    nba_person_id: 1630162
   },
 ];

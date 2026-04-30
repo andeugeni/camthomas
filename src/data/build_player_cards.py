@@ -160,7 +160,7 @@ def load_bio(base_year: int) -> pd.DataFrame:
 
     if bio.empty:
         log.warning("player_bio.csv not found in %s", RAW_DIR)
-        return pd.DataFrame(columns=["player_id", "ht_inches", "wt", "draft_pick"])
+        return pd.DataFrame(columns=["player_id", "ht_inches", "wt", "draft_pick"], )
 
     bio = bio.drop_duplicates(subset="player_id", keep="first")
     keep = [c for c in ["player_id", "height_in", "weight_lbs", "draft_pick"] if c in bio.columns]
