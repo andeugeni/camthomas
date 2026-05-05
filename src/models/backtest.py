@@ -1,14 +1,14 @@
 """
 backtest.py
 -----------
-Compares SPS vs four CARMELO similarity variants across historical snapshot
+Compares SPS vs four camthomas similarity variants across historical snapshot
 years 1990-2025.
 
 Methods
 ~~~~~~~
   SPS             — raw projection, no adjustment
-  carmelo-linear  — exponential decay similarity, linear weighting
-  carmelo-squared — exponential decay similarity, squared weighting
+  camthomas-linear  — exponential decay similarity, linear weighting
+  camthomas-squared — exponential decay similarity, squared weighting
   538-linear      — FiveThirtyEight deviance formula, linear weighting
   538-squared     — FiveThirtyEight deviance formula, squared weighting
 
@@ -19,7 +19,7 @@ Methods
   similarity = 100 * (1.25 - deviance) / 1.25
   Drop any comp with similarity <= 0 (deviance >= 1.25).
 
-CARMELO similarity
+camthomas similarity
 ~~~~~~~~~~~~~~~~~~
   Z-score globally (all years), exponential decay:
   similarity = 100 * exp(-dist / k)  where k = median pairwise dist in pool
@@ -119,7 +119,7 @@ AGE_BUCKETS = [
     ("36+",   36, 99),
 ]
 
-METHODS = ["SPS", "carmelo-linear", "carmelo-squared", "538-linear", "538-squared"]
+METHODS = ["SPS", "camthomas-linear", "camthomas-squared", "538-linear", "538-squared"]
 
 logging.basicConfig(
     level=logging.INFO,
@@ -431,7 +431,7 @@ def _538_sims(
 
 
 # ---------------------------------------------------------------------------
-# Adjust one snapshot year — all 4 CARMELO variants
+# Adjust one snapshot year — all 4 camthomas variants
 # ---------------------------------------------------------------------------
 
 def adjust_one_year(
@@ -448,7 +448,7 @@ def adjust_one_year(
                           if f"delta_y{i}" in hist_sub.columns]
 
     def _fallback(df):
-        for method in ["carmelo-linear", "carmelo-squared", "538-linear", "538-squared"]:
+        for method in ["camthomas-linear", "camthomas-squared", "538-linear", "538-squared"]:
             for i in range(1, FUTURE_YEARS + 1):
                 df[f"{method}_fpts_y{i}"] = df[f"sps_fpts_y{i}"]
         return df
@@ -501,7 +501,7 @@ def adjust_one_year(
     # Accumulate results
     variant_results: dict[str, list] = {
         f"{m}_fpts_y{i}": []
-        for m in ["carmelo-linear", "carmelo-squared", "538-linear", "538-squared"]
+        for m in ["camthomas-linear", "camthomas-squared", "538-linear", "538-squared"]
         for i in range(1, FUTURE_YEARS + 1)
     }
 
@@ -534,7 +534,7 @@ def adjust_one_year(
                 d_all = np.array([])
 
             # current variants
-            for weighting, tag in [("linear", "carmelo-linear"), ("squared", "carmelo-squared")]:
+            for weighting, tag in [("linear", "camthomas-linear"), ("squared", "camthomas-squared")]:
                 col = f"{tag}_fpts_y{i}"
                 if len(sims_curr) == 0 or len(d_all) == 0:
                     variant_results[col].append(sps_val)
@@ -742,7 +742,7 @@ def run_backtest(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Backtest SPS vs 4 CARMELO variants")
+    parser = argparse.ArgumentParser(description="Backtest SPS vs 4 camthomas variants")
     parser.add_argument("--start-year", type=int, default=1990)
     parser.add_argument("--end-year",   type=int, default=2020)
     parser.add_argument("--min-g",      type=int, default=MIN_G_DEFAULT)
